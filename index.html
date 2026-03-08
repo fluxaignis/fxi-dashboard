@@ -171,8 +171,8 @@
                         <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
                     </div>
                     <div class="glass-card">
-                    <div class="card-title">Señal RSSI</div>
-                    <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
+                        <div class="card-title">Señal RSSI</div>
+                        <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
                     </div>
                     <div class="glass-card" style="grid-column: span 1;">
                         <div class="card-title">Estado Red</div>
@@ -183,7 +183,7 @@
         </div>
 
         <div class="footer">
-            <button class="btn-update" onclick="reconectarMQTT()">Reconectar Sistema</button>
+            <button class="btn-update" onclick="iniciarSistema()">Reconectar Sistema</button>
         </div>
     </div>
 
@@ -199,12 +199,27 @@
             initParticles();
         };
 
-        // --- LÓGICA DE DATOS REAL-TIME (MQTT CLOUD) ---
+        // --- FUNCIÓN PARA ACTUALIZAR UI ---
+        function procesarDatos(data) {
+            if(data.temp !== undefined) {
+                updateValue('temp-val', data.temp.toFixed(1), '°C');
+                document.getElementById('bar-temp').style.height = (data.temp * 2) + '%';
+            }
+            if(data.hum !== undefined) {
+                updateValue('hum-val', Math.round(data.hum), '%');
+                document.getElementById('bar-hum').style.height = data.hum + '%';
+            }
+            if(data.rssi !== undefined) {
+                updateValue('rssi-val', data.rssi, 'dBm');
+            }
+        }
+
+        // --- LÓGICA DE DATOS REAL-TIME (SOLO MQTT CLOUD PARA GITHUB) ---
         const options = {
             connectTimeout: 4000,
             clientId: 'fxi_web_' + Math.random().toString(16).substr(2, 8),
             username: 'Admin',
-            password: 'FluxaIgnis2026', // <--- ¡CÁMBIA ESTO POR LA CLAVE QUE CREASTE EN HIVEMQ!
+            password: 'FluxaIgnis2026', 
         };
 
         let client;
@@ -216,42 +231,45 @@
                 console.log('¡Conectado a HiveMQ Cloud!');
                 document.getElementById('esp-status').innerText = 'Online (Cloud)';
                 document.getElementById('esp-status').style.background = 'var(--chart-green)';
-                document.getElementById('desc-val').innerText = 'Recibiendo telemetría';
-                document.getElementById('net-status').innerText = 'Excelente';
+                document.getElementById('desc-val').innerText = 'Recibiendo telemetría global';
+                document.getElementById('net-status').innerText = 'Conexión a Nube Estable';
+                document.getElementById('net-status').style.color = 'var(--text-sec)';
                 
-                // Nos suscribimos al canal donde el ESP32 envía los datos
                 client.subscribe('fxi/datos');
             });
 
             client.on('message', (topic, message) => {
                 try {
                     const data = JSON.parse(message.toString());
-                    
-                    // Actualizar UI (Asegúrate de que el ESP32 envíe JSON con {"temp": 25, "hum": 60})
-                    if(data.temp !== undefined) updateValue('temp-val', data.temp.toFixed(1), '°C');
-                    if(data.hum !== undefined) updateValue('hum-val', Math.round(data.hum), '%');
-                    
-                    // Actualizar Barras
-                    if(data.temp !== undefined) document.getElementById('bar-temp').style.height = (data.temp * 2) + '%';
-                    if(data.hum !== undefined) document.getElementById('bar-hum').style.height = data.hum + '%';
-                    if(data.rssi !== undefined) updateValue('rssi-val', data.rssi, 'dBm');
-
+                    procesarDatos(data);
                 } catch (e) {
-                    console.error("Error leyendo datos del ESP32", e);
+                    console.error("Error leyendo datos JSON", e);
                 }
             });
 
             client.on('offline', () => {
-                document.getElementById('esp-status').innerText = 'Offline';
+                document.getElementById('esp-status').innerText = 'Offline (Cloud)';
                 document.getElementById('esp-status').style.background = 'var(--chart-pink)';
-                document.getElementById('net-status').innerText = 'Desconectado';
+                document.getElementById('net-status').innerText = 'Servidor MQTT Inaccesible';
+                document.getElementById('net-status').style.color = '#F06292';
             });
         }
 
-        function reconectarMQTT() {
-            document.getElementById('esp-status').innerText = 'Reconectando...';
+        function iniciarSistema() {
+            document.getElementById('esp-status').innerText = 'Verificando red...';
+            
+            // Verificamos si la librería MQTT cargó correctamente
+            if (typeof mqtt === 'undefined') {
+                document.getElementById('esp-status').innerText = 'Error';
+                document.getElementById('esp-status').style.background = 'var(--chart-pink)';
+                document.getElementById('net-status').innerText = 'Sin conexión a Internet';
+                document.getElementById('net-status').style.color = '#F06292';
+                console.error("No se pudo cargar la librería MQTT. Verifica tu conexión a internet.");
+                return; 
+            }
+
             if(client) client.end();
-            setTimeout(conectarMQTT, 1000);
+            setTimeout(conectarMQTT, 500);
         }
 
         function updateValue(id, value, unit) {
@@ -312,15 +330,8 @@
         // Inicializar todo
         initParticles();
         animate();
-        conectarMQTT(); // Inicia la conexión a la nube al cargar la página
+        iniciarSistema(); // Inicia la conexión a la nube al cargar la página
 
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
