@@ -171,8 +171,8 @@
                         <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
                     </div>
                     <div class="glass-card">
-                        <div class="card-title">Señal RSSI</div>
-                        <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
+                    <div class="card-title">Señal RSSI</div>
+                    <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
                     </div>
                     <div class="glass-card" style="grid-column: span 1;">
                         <div class="card-title">Estado Red</div>
@@ -234,6 +234,7 @@
                     // Actualizar Barras
                     if(data.temp !== undefined) document.getElementById('bar-temp').style.height = (data.temp * 2) + '%';
                     if(data.hum !== undefined) document.getElementById('bar-hum').style.height = data.hum + '%';
+                    if(data.rssi !== undefined) updateValue('rssi-val', data.rssi, 'dBm');
 
                 } catch (e) {
                     console.error("Error leyendo datos del ESP32", e);
@@ -316,6 +317,7 @@
     </script>
 </body>
 </html>
+
 
 
 
