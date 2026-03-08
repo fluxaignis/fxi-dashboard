@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FXI Dashboard - Real-Time</title>
+    <style>
+        :root {
+            --bg-start: #0C142A;
+            --bg-end: #202D53;
+            --glass-bg: rgba(20, 30, 50, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #FFFFFF;
+            --text-sec: rgba(255, 255, 255, 0.6);
+            --accent-cyan: #7AF0D4;
+            --accent-blue: #39B3FF;
+            --chart-pink: #F06292;
+            --chart-blue: #4FC3F7;
+            --chart-green: #81C784;
+        }
+
+        body.light-mode {
+            --bg-start: #E0F2F1;
+            --bg-end: #B2EBF2;
+            --glass-bg: rgba(255, 255, 255, 0.5);
+            --glass-border: rgba(0, 0, 0, 0.05);
+            --text-main: #1A237E;
+            --text-sec: rgba(26, 35, 126, 0.6);
+        }
+
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+            color: var(--text-main);
+            min-height: 100vh; overflow-x: hidden;
+            transition: background 0.5s ease;
+        }
+
+        #weather-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none;
+        }
+
+        .main-content {
+            position: relative; z-index: 1;
+            max-width: 1200px; margin: 0 auto;
+            padding: 40px 20px;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- HEADER --- */
+        .header { display: flex; align-items: center; margin-bottom: 35px; width: 100%; }
+        .fxi-logo {
+            font-weight: 900; font-size: 32px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-right: 20px;
+        }
+        #theme-toggle {
+            margin-left: auto; cursor: pointer; font-size: 26px;
+            transition: transform 0.2s; user-select: none;
+        }
+        #theme-toggle:hover { transform: scale(1.2); }
+
+        /* --- GRID SISTEMA --- */
+        .dashboard-grid {
+            display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 25px;
+        }
+        .left-column, .right-column { display: flex; flex-direction: column; gap: 25px; }
+        .right-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        .glass-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 28px; padding: 25px;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .glass-card:hover { transform: translateY(-5px); }
+
+        .card-title { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-sec); margin-bottom: 10px; }
+        .val-big { font-size: clamp(40px, 8vw, 64px); font-weight: 200; transition: all 0.5s ease; }
+        .val-med { font-size: 32px; font-weight: 500; transition: all 0.5s ease; }
+        .unit { font-size: 16px; opacity: 0.7; }
+
+        /* --- BARRAS --- */
+        .chart-container { height: 120px; display: flex; align-items: flex-end; justify-content: space-around; margin-top: 15px; }
+        .bar-group { width: 35px; text-align: center; }
+        .bar-bg { height: 80px; background: rgba(0,0,0,0.1); border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
+        .bar-fill { width: 100%; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* --- FOOTER --- */
+        .footer { margin-top: 40px; display: flex; justify-content: center; }
+        .btn-update {
+            background: var(--accent-blue); color: white; border: none;
+            padding: 12px 30px; border-radius: 50px; font-weight: 600; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(57, 179, 255, 0.3);
+        }
+
+        /* --- ESTADO --- */
+        #esp-status { font-size: 10px; padding: 3px 8px; border-radius: 10px; color: #fff; background: var(--chart-pink); }
+
+        /* --- DETECCIÓN MÓVIL (Responsivo) --- */
+        @media (max-width: 850px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .main-content { padding: 20px; }
+            .right-grid { grid-template-columns: 1fr 1fr; } /* Mantiene 2 columnas en móvil para tarjetas pequeñas */
+        }
+
+        @media (max-width: 480px) {
+            .right-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; align-items: flex-start; gap: 15px; }
+            #theme-toggle { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="weather-canvas"></canvas>
+
+    <div class="main-content">
+        <div class="header">
+            <div class="fxi-logo">FXI</div>
+            <div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="font-weight: 600; font-size: 18px;">Módulo ESP32</div>
+                    <span id="esp-status">Offline</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-sec);">Lectura en Tiempo Real</div>
+            </div>
+            <div id="theme-toggle">✳</div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="left-column">
+                <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div class="card-title">Temperatura</div>
+                        <div class="val-big" id="temp-val">--<span class="unit">°C</span></div>
+                        <div id="desc-val" style="font-size: 14px; opacity: 0.8;">Sincronizando...</div>
+                    </div>
+                    <div style="font-size: 60px;">🌡️</div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="card-title">Niveles Actuales</div>
+                    <div class="chart-container">
+                        <div class="bar-group">
+                            <div class="bar-bg"><div id="bar-temp" class="bar-fill" style="background: var(--chart-pink);"></div></div>
+                            <div style="font-size: 10px; margin-top: 5px;">T</div>
+                        </div>
+                        <div class="bar-group">
+                            <div class="bar-bg"><div id="bar-hum" class="bar-fill" style="background: var(--chart-blue);"></div></div>
+                            <div style="font-size: 10px; margin-top: 5px;">H</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-column">
+                <div class="right-grid">
+                    <div class="glass-card">
+                        <div class="card-title">Humedad</div>
+                        <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Señal RSSI</div>
+                        <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
+                    </div>
+                    <div class="glass-card" style="grid-column: span 1;">
+                        <div class="card-title">Estado Red</div>
+                        <div id="net-status" style="font-size: 14px; font-weight: bold; color: var(--accent-cyan);">Buscando...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <button class="btn-update" onclick="fetchESP32Data()">Forzar Actualización</button>
+        </div>
+    </div>
+
+    <script>
+        let isDarkMode = true;
+        const themeBtn = document.getElementById('theme-toggle');
+
+        themeBtn.onclick = () => {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('light-mode');
+            themeBtn.innerText = isDarkMode ? '✳' : '☀️';
+            initParticles();
+        };
+
+        // --- LÓGICA DE DATOS REAL-TIME ---
+        const ESP32_URL = '/data'; 
+
+        async function fetchESP32Data() {
+            try {
+                const response = await fetch(ESP32_URL);
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+
+                // Actualizar UI con animación suave
+                updateValue('temp-val', data.temperatura.toFixed(1), '°C');
+                updateValue('hum-val', Math.round(data.humedad), '%');
+                
+                document.getElementById('esp-status').innerText = 'Online';
+                document.getElementById('esp-status').style.background = 'var(--chart-green)';
+                document.getElementById('desc-val').innerText = 'Conexión Estable';
+                document.getElementById('net-status').innerText = 'Excelente';
+
+                // Actualizar Barras
+                document.getElementById('bar-temp').style.height = (data.temperatura * 2) + '%';
+                document.getElementById('bar-hum').style.height = data.humedad + '%';
+
+            } catch (e) {
+                document.getElementById('esp-status').innerText = 'Offline';
+                document.getElementById('esp-status').style.background = 'var(--chart-pink)';
+                document.getElementById('net-status').innerText = 'Desconectado';
+            }
+        }
+
+        function updateValue(id, value, unit) {
+            const el = document.getElementById(id);
+            if(el.innerText !== value + unit) {
+                el.style.opacity = 0.5;
+                setTimeout(() => {
+                    el.innerHTML = `${value}<span class="unit">${unit}</span>`;
+                    el.style.opacity = 1;
+                }, 200);
+            }
+        }
+
+        // --- PARTÍCULAS ---
+        const canvas = document.getElementById('weather-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.onresize = resize;
+        resize();
+
+        class Particle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 1;
+                this.alpha = Math.random();
+                this.speed = Math.random() * 0.02;
+            }
+            update() {
+                this.alpha += this.speed;
+                if(this.alpha > 1 || this.alpha < 0) this.speed *= -1;
+            }
+            draw() {
+                ctx.fillStyle = isDarkMode ? `rgba(255,255,255,${this.alpha * 0.2})` : `rgba(26,35,126,${this.alpha * 0.1})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            for(let i=0; i<60; i++) particles.push(new Particle());
+        }
+
+        function animate() {
+            ctx.clearRect(0,0, canvas.width, canvas.height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animate);
+        }
+
+        initParticles();
+        animate();
+        
+        // ACTUALIZACIÓN EN TIEMPO REAL (Cada 2 segundos)
+        fetchESP32Data();
+        setInterval(fetchESP32Data, 2000);
+
+    </script>
+</body>
+</html>
