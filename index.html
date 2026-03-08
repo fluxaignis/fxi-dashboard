@@ -3,17 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FXI Dashboard - Real-Time</title>
+    <title>FXI Dashboard - Cloud MQTT</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root {
-            --bg-start: #0C142A;
-            --bg-end: #202D53;
+            /* Colores ajustados al logo de FLUX A IGNIS */
+            --bg-start: #0B3954; 
+            --bg-end: #061A2B;
             --glass-bg: rgba(20, 30, 50, 0.6);
             --glass-border: rgba(255, 255, 255, 0.1);
             --text-main: #FFFFFF;
             --text-sec: rgba(255, 255, 255, 0.6);
             --accent-cyan: #7AF0D4;
-            --accent-blue: #39B3FF;
+            --accent-blue: #EAE2D1; /* Color crema del logo */
             --chart-pink: #F06292;
             --chart-blue: #4FC3F7;
             --chart-green: #81C784;
@@ -24,8 +26,8 @@
             --bg-end: #B2EBF2;
             --glass-bg: rgba(255, 255, 255, 0.5);
             --glass-border: rgba(0, 0, 0, 0.05);
-            --text-main: #1A237E;
-            --text-sec: rgba(26, 35, 126, 0.6);
+            --text-main: #0B3954;
+            --text-sec: rgba(11, 57, 84, 0.6);
         }
 
         body {
@@ -64,9 +66,7 @@
         #theme-toggle:hover { transform: scale(1.2); }
 
         /* --- GRID SISTEMA --- */
-        .dashboard-grid {
-            display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 25px;
-        }
+        .dashboard-grid { display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 25px; }
         .left-column, .right-column { display: flex; flex-direction: column; gap: 25px; }
         .right-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 
@@ -94,10 +94,12 @@
         /* --- FOOTER --- */
         .footer { margin-top: 40px; display: flex; justify-content: center; }
         .btn-update {
-            background: var(--accent-blue); color: white; border: none;
-            padding: 12px 30px; border-radius: 50px; font-weight: 600; cursor: pointer;
-            box-shadow: 0 4px 15px rgba(57, 179, 255, 0.3);
+            background: var(--accent-blue); color: #0B3954; border: none;
+            padding: 12px 30px; border-radius: 50px; font-weight: 700; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(234, 226, 209, 0.2);
+            transition: all 0.3s ease;
         }
+        .btn-update:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(234, 226, 209, 0.4); }
 
         /* --- ESTADO --- */
         #esp-status { font-size: 10px; padding: 3px 8px; border-radius: 10px; color: #fff; background: var(--chart-pink); }
@@ -106,7 +108,7 @@
         @media (max-width: 850px) {
             .dashboard-grid { grid-template-columns: 1fr; }
             .main-content { padding: 20px; }
-            .right-grid { grid-template-columns: 1fr 1fr; } /* Mantiene 2 columnas en móvil para tarjetas pequeñas */
+            .right-grid { grid-template-columns: 1fr 1fr; }
         }
 
         @media (max-width: 480px) {
@@ -122,13 +124,13 @@
 
     <div class="main-content">
         <div class="header">
-            <div class="fxi-logo">FXI</div>
+            <div class="fxi-logo">FLUX A IGNIS</div>
             <div>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div style="font-weight: 600; font-size: 18px;">Módulo ESP32</div>
-                    <span id="esp-status">Offline</span>
+                    <span id="esp-status">Conectando...</span>
                 </div>
-                <div style="font-size: 12px; color: var(--text-sec);">Lectura en Tiempo Real</div>
+                <div style="font-size: 12px; color: var(--text-sec);">Cloud MQTT Activo</div>
             </div>
             <div id="theme-toggle">✳</div>
         </div>
@@ -139,7 +141,7 @@
                     <div>
                         <div class="card-title">Temperatura</div>
                         <div class="val-big" id="temp-val">--<span class="unit">°C</span></div>
-                        <div id="desc-val" style="font-size: 14px; opacity: 0.8;">Sincronizando...</div>
+                        <div id="desc-val" style="font-size: 14px; opacity: 0.8;">Esperando datos...</div>
                     </div>
                     <div style="font-size: 60px;">🌡️</div>
                 </div>
@@ -148,11 +150,11 @@
                     <div class="card-title">Niveles Actuales</div>
                     <div class="chart-container">
                         <div class="bar-group">
-                            <div class="bar-bg"><div id="bar-temp" class="bar-fill" style="background: var(--chart-pink);"></div></div>
+                            <div class="bar-bg"><div id="bar-temp" class="bar-fill" style="background: var(--chart-pink); height: 0%;"></div></div>
                             <div style="font-size: 10px; margin-top: 5px;">T</div>
                         </div>
                         <div class="bar-group">
-                            <div class="bar-bg"><div id="bar-hum" class="bar-fill" style="background: var(--chart-blue);"></div></div>
+                            <div class="bar-bg"><div id="bar-hum" class="bar-fill" style="background: var(--chart-blue); height: 0%;"></div></div>
                             <div style="font-size: 10px; margin-top: 5px;">H</div>
                         </div>
                     </div>
@@ -171,18 +173,19 @@
                     </div>
                     <div class="glass-card" style="grid-column: span 1;">
                         <div class="card-title">Estado Red</div>
-                        <div id="net-status" style="font-size: 14px; font-weight: bold; color: var(--accent-cyan);">Buscando...</div>
+                        <div id="net-status" style="font-size: 14px; font-weight: bold; color: var(--accent-cyan);">Buscando Nube...</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="footer">
-            <button class="btn-update" onclick="fetchESP32Data()">Forzar Actualización</button>
+            <button class="btn-update" onclick="reconectarMQTT()">Reconectar Sistema</button>
         </div>
     </div>
 
     <script>
+        // --- TEMA Y PARTÍCULAS ---
         let isDarkMode = true;
         const themeBtn = document.getElementById('theme-toggle');
 
@@ -193,33 +196,58 @@
             initParticles();
         };
 
-        // --- LÓGICA DE DATOS REAL-TIME ---
-        const ESP32_URL = '/data'; 
+        // --- LÓGICA DE DATOS REAL-TIME (MQTT CLOUD) ---
+        const options = {
+            connectTimeout: 4000,
+            clientId: 'fxi_web_' + Math.random().toString(16).substr(2, 8),
+            username: 'Admin',
+            password: 'FluxaIgnis2026', // <--- ¡CÁMBIA ESTO POR LA CLAVE QUE CREASTE EN HIVEMQ!
+        };
 
-        async function fetchESP32Data() {
-            try {
-                const response = await fetch(ESP32_URL);
-                if (!response.ok) throw new Error();
-                const data = await response.json();
+        let client;
 
-                // Actualizar UI con animación suave
-                updateValue('temp-val', data.temperatura.toFixed(1), '°C');
-                updateValue('hum-val', Math.round(data.humedad), '%');
-                
-                document.getElementById('esp-status').innerText = 'Online';
+        function conectarMQTT() {
+            client = mqtt.connect('wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt', options);
+
+            client.on('connect', () => {
+                console.log('¡Conectado a HiveMQ Cloud!');
+                document.getElementById('esp-status').innerText = 'Online (Cloud)';
                 document.getElementById('esp-status').style.background = 'var(--chart-green)';
-                document.getElementById('desc-val').innerText = 'Conexión Estable';
+                document.getElementById('desc-val').innerText = 'Recibiendo telemetría';
                 document.getElementById('net-status').innerText = 'Excelente';
+                
+                // Nos suscribimos al canal donde el ESP32 envía los datos
+                client.subscribe('fxi/datos');
+            });
 
-                // Actualizar Barras
-                document.getElementById('bar-temp').style.height = (data.temperatura * 2) + '%';
-                document.getElementById('bar-hum').style.height = data.humedad + '%';
+            client.on('message', (topic, message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+                    
+                    // Actualizar UI (Asegúrate de que el ESP32 envíe JSON con {"temp": 25, "hum": 60})
+                    if(data.temp !== undefined) updateValue('temp-val', data.temp.toFixed(1), '°C');
+                    if(data.hum !== undefined) updateValue('hum-val', Math.round(data.hum), '%');
+                    
+                    // Actualizar Barras
+                    if(data.temp !== undefined) document.getElementById('bar-temp').style.height = (data.temp * 2) + '%';
+                    if(data.hum !== undefined) document.getElementById('bar-hum').style.height = data.hum + '%';
 
-            } catch (e) {
+                } catch (e) {
+                    console.error("Error leyendo datos del ESP32", e);
+                }
+            });
+
+            client.on('offline', () => {
                 document.getElementById('esp-status').innerText = 'Offline';
                 document.getElementById('esp-status').style.background = 'var(--chart-pink)';
                 document.getElementById('net-status').innerText = 'Desconectado';
-            }
+            });
+        }
+
+        function reconectarMQTT() {
+            document.getElementById('esp-status').innerText = 'Reconectando...';
+            if(client) client.end();
+            setTimeout(conectarMQTT, 1000);
         }
 
         function updateValue(id, value, unit) {
@@ -233,7 +261,7 @@
             }
         }
 
-        // --- PARTÍCULAS ---
+        // --- SISTEMA DE PARTÍCULAS ---
         const canvas = document.getElementById('weather-canvas');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -259,7 +287,7 @@
                 if(this.alpha > 1 || this.alpha < 0) this.speed *= -1;
             }
             draw() {
-                ctx.fillStyle = isDarkMode ? `rgba(255,255,255,${this.alpha * 0.2})` : `rgba(26,35,126,${this.alpha * 0.1})`;
+                ctx.fillStyle = isDarkMode ? `rgba(234, 226, 209,${this.alpha * 0.2})` : `rgba(11, 57, 84,${this.alpha * 0.1})`;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
                 ctx.fill();
@@ -277,12 +305,10 @@
             requestAnimationFrame(animate);
         }
 
+        // Inicializar todo
         initParticles();
         animate();
-        
-        // ACTUALIZACIÓN EN TIEMPO REAL (Cada 2 segundos)
-        fetchESP32Data();
-        setInterval(fetchESP32Data, 2000);
+        conectarMQTT(); // Inicia la conexión a la nube al cargar la página
 
     </script>
 </body>
