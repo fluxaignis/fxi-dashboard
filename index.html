@@ -357,56 +357,61 @@
             requestAnimationFrame(animate);
         }
 
-// --- CONTROL DEL SERVO (BARRIDO DE RADAR) ---
+// --- CONTROL DEL SERVO (BARRIDO DE RADAR) HÍBRIDO ---
         function toggleServo() {
             const btn = document.getElementById('btn-servo');
-            
-            // 1. Feedback inmediato: cambia el texto para que sepas que el clic funcionó
             btn.innerText = "ENVIANDO COMANDO...";
             btn.style.opacity = "0.7";
 
-            // ⚠️ ATENCIÓN AQUÍ ⚠️
-            // Si abres este HTML con doble clic en tu PC o desde GitHub, '/toggleServo' NO funcionará 
-            // porque intentará buscar esa ruta en tu disco duro o en los servidores de GitHub.
-            // En ese caso, debes cambiar la variable de abajo por la IP de tu ESP32, ejemplo: 'http://192.168.1.100/toggleServo'
-            // Si vas a meter el HTML dentro de la memoria del ESP32, déjalo como '/toggleServo'.
-            
-            const urlServo = '/toggleServo'; 
-
-            fetch(urlServo)
-                .then(response => {
-                    if (!response.ok) throw new Error("El ESP32 rechazó la conexión");
-                    return response.text();
-                })
-                .then(state => {
-                    btn.style.opacity = "1";
-                    
-                    // Si el ESP32 responde "ON", activamos el botón
-                    if(state === "ON") {
-                        btn.classList.add('active');
-                        btn.innerText = "SISTEMA ACTIVO";
-                    } else {
-                        btn.classList.remove('active');
-                        btn.innerText = "DESACTIVADO";
-                    }
-                })
-                .catch(err => {
-                    console.error("Fallo de red al contactar al ESP32:", err);
-                    
-                    // 2. Feedback de error: Si falla, el botón se pondrá ROJO para avisarte
+            // 1. MODO NUBE: Si MQTT está conectado, enviamos por ahí
+            if (typeof client !== 'undefined' && client.connected) {
+                // Publicamos en un tópico nuevo para que el ESP32 lo lea
+                client.publish('fxi/comandos', 'TOGGLE');
+                
+                // Actualizamos el botón visualmente
+                btn.style.opacity = "1";
+                if (btn.classList.contains('active')) {
                     btn.classList.remove('active');
-                    btn.style.opacity = "1";
-                    btn.style.borderColor = "#F06292"; // Rosa de tu paleta
-                    btn.style.color = "#F06292";
-                    btn.innerText = "ERROR DE CONEXIÓN";
-                    
-                    // Vuelve a la normalidad después de 3 segundos
-                    setTimeout(() => {
-                        btn.style.borderColor = "var(--accent-cyan)";
-                        btn.style.color = "var(--accent-cyan)";
-                        btn.innerText = "DESACTIVADO (REINTENTAR)";
-                    }, 3000);
-                });
+                    btn.innerText = "DESACTIVADO";
+                } else {
+                    btn.classList.add('active');
+                    btn.innerText = "SISTEMA ACTIVO";
+                }
+                console.log("Comando enviado vía MQTT Cloud");
+            } 
+            // 2. MODO LOCAL: Si MQTT falló, usamos fetch asumiendo que estamos en la IP del ESP32
+            else {
+                fetch('/toggleServo')
+                    .then(response => {
+                        if (!response.ok) throw new Error("Fallo HTTP");
+                        return response.text();
+                    })
+                    .then(state => {
+                        btn.style.opacity = "1";
+                        if(state === "ON") {
+                            btn.classList.add('active');
+                            btn.innerText = "SISTEMA ACTIVO";
+                        } else {
+                            btn.classList.remove('active');
+                            btn.innerText = "DESACTIVADO";
+                        }
+                        console.log("Comando enviado vía Fetch Local");
+                    })
+                    .catch(err => {
+                        console.error("Fallo de red total:", err);
+                        btn.classList.remove('active');
+                        btn.style.opacity = "1";
+                        btn.style.borderColor = "var(--chart-pink)";
+                        btn.style.color = "var(--chart-pink)";
+                        btn.innerText = "SIN CONEXIÓN";
+                        
+                        setTimeout(() => {
+                            btn.style.borderColor = "var(--accent-cyan)";
+                            btn.style.color = "var(--accent-cyan)";
+                            btn.innerText = "DESACTIVADO (REINTENTAR)";
+                        }, 3000);
+                    });
+            }
         }
 
         // Inicializar todo
@@ -417,4 +422,5 @@
     </script>
 </body>
 </html>
+
 
