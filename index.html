@@ -357,13 +357,31 @@
             requestAnimationFrame(animate);
         }
 
-        // --- CONTROL DEL SERVO (BARRIDO DE RADAR) ---
+// --- CONTROL DEL SERVO (BARRIDO DE RADAR) ---
         function toggleServo() {
             const btn = document.getElementById('btn-servo');
             
-            fetch('/toggleServo')
-                .then(response => response.text())
+            // 1. Feedback inmediato: cambia el texto para que sepas que el clic funcionó
+            btn.innerText = "ENVIANDO COMANDO...";
+            btn.style.opacity = "0.7";
+
+            // ⚠️ ATENCIÓN AQUÍ ⚠️
+            // Si abres este HTML con doble clic en tu PC o desde GitHub, '/toggleServo' NO funcionará 
+            // porque intentará buscar esa ruta en tu disco duro o en los servidores de GitHub.
+            // En ese caso, debes cambiar la variable de abajo por la IP de tu ESP32, ejemplo: 'http://192.168.1.100/toggleServo'
+            // Si vas a meter el HTML dentro de la memoria del ESP32, déjalo como '/toggleServo'.
+            
+            const urlServo = '/toggleServo'; 
+
+            fetch(urlServo)
+                .then(response => {
+                    if (!response.ok) throw new Error("El ESP32 rechazó la conexión");
+                    return response.text();
+                })
                 .then(state => {
+                    btn.style.opacity = "1";
+                    
+                    // Si el ESP32 responde "ON", activamos el botón
                     if(state === "ON") {
                         btn.classList.add('active');
                         btn.innerText = "SISTEMA ACTIVO";
@@ -372,7 +390,23 @@
                         btn.innerText = "DESACTIVADO";
                     }
                 })
-                .catch(err => console.error("Error al controlar el servo:", err));
+                .catch(err => {
+                    console.error("Fallo de red al contactar al ESP32:", err);
+                    
+                    // 2. Feedback de error: Si falla, el botón se pondrá ROJO para avisarte
+                    btn.classList.remove('active');
+                    btn.style.opacity = "1";
+                    btn.style.borderColor = "#F06292"; // Rosa de tu paleta
+                    btn.style.color = "#F06292";
+                    btn.innerText = "ERROR DE CONEXIÓN";
+                    
+                    // Vuelve a la normalidad después de 3 segundos
+                    setTimeout(() => {
+                        btn.style.borderColor = "var(--accent-cyan)";
+                        btn.style.color = "var(--accent-cyan)";
+                        btn.innerText = "DESACTIVADO (REINTENTAR)";
+                    }, 3000);
+                });
         }
 
         // Inicializar todo
@@ -383,3 +417,4 @@
     </script>
 </body>
 </html>
+
