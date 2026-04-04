@@ -9,8 +9,8 @@
     <link rel="manifest" href="manifest.json">
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
+        /* (El mismo CSS que tenías, no se modifica) */
         :root {
-            /* Colores ajustados al logo de FLUX A IGNIS */
             --bg-start: #0B3954; 
             --bg-end: #061A2B;
             --glass-bg: rgba(20, 30, 50, 0.6);
@@ -18,12 +18,11 @@
             --text-main: #FFFFFF;
             --text-sec: rgba(255, 255, 255, 0.6);
             --accent-cyan: #7AF0D4;
-            --accent-blue: #EAE2D1; /* Color crema del logo */
+            --accent-blue: #EAE2D1;
             --chart-pink: #F06292;
             --chart-blue: #4FC3F7;
             --chart-green: #81C784;
         }
-
         body.light-mode {
             --bg-start: #E0F2F1;
             --bg-end: #B2EBF2;
@@ -32,7 +31,6 @@
             --text-main: #0B3954;
             --text-sec: rgba(11, 57, 84, 0.6);
         }
-
         body {
             margin: 0; padding: 0;
             font-family: 'Segoe UI', sans-serif;
@@ -41,20 +39,16 @@
             min-height: 100vh; overflow-x: hidden;
             transition: background 0.5s ease;
         }
-
         #weather-canvas {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 0; pointer-events: none;
         }
-
         .main-content {
             position: relative; z-index: 1;
             max-width: 1200px; margin: 0 auto;
             padding: 40px 20px;
             display: flex; flex-direction: column;
         }
-
-        /* --- HEADER --- */
         .header { display: flex; align-items: center; margin-bottom: 35px; width: 100%; }
         .fxi-logo {
             font-weight: 900; font-size: 32px;
@@ -67,12 +61,9 @@
             transition: transform 0.2s; user-select: none;
         }
         #theme-toggle:hover { transform: scale(1.2); }
-
-        /* --- GRID SISTEMA --- */
         .dashboard-grid { display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 25px; }
         .left-column, .right-column { display: flex; flex-direction: column; gap: 25px; }
         .right-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-
         .glass-card {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
@@ -82,19 +73,14 @@
             transition: transform 0.3s ease;
         }
         .glass-card:hover { transform: translateY(-5px); }
-
         .card-title { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-sec); margin-bottom: 10px; }
         .val-big { font-size: clamp(40px, 8vw, 64px); font-weight: 200; transition: all 0.5s ease; }
         .val-med { font-size: 32px; font-weight: 500; transition: all 0.5s ease; }
         .unit { font-size: 16px; opacity: 0.7; }
-
-        /* --- BARRAS --- */
         .chart-container { height: 120px; display: flex; align-items: flex-end; justify-content: space-around; margin-top: 15px; }
         .bar-group { width: 35px; text-align: center; }
         .bar-bg { height: 80px; background: rgba(0,0,0,0.1); border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
         .bar-fill { width: 100%; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
-
-        /* --- FOOTER --- */
         .footer { margin-top: 40px; display: flex; justify-content: center; }
         .btn-update {
             background: var(--accent-blue); color: #0B3954; border: none;
@@ -103,24 +89,17 @@
             transition: all 0.3s ease;
         }
         .btn-update:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(234, 226, 209, 0.4); }
-
-        /* --- ESTADO --- */
         #esp-status { font-size: 10px; padding: 3px 8px; border-radius: 10px; color: #fff; background: var(--chart-pink); }
-
-        /* --- DETECCIÓN MÓVIL (Responsivo) --- */
         @media (max-width: 850px) {
             .dashboard-grid { grid-template-columns: 1fr; }
             .main-content { padding: 20px; }
             .right-grid { grid-template-columns: 1fr 1fr; }
         }
-
         @media (max-width: 480px) {
             .right-grid { grid-template-columns: 1fr; }
             .header { flex-direction: column; align-items: flex-start; gap: 15px; }
             #theme-toggle { margin-left: 0; }
         }
-
-        /* --- BOTÓN SERVO ESTILO FXI --- */
         .btn-servo {
             background: rgba(255, 255, 255, 0.05);
             border: 2px solid var(--accent-cyan);
@@ -147,9 +126,7 @@
     </style>
 </head>
 <body>
-
     <canvas id="weather-canvas"></canvas>
-
     <div class="main-content">
         <div class="header">
             <div class="fxi-logo">FLUXA IGNIS</div>
@@ -173,7 +150,6 @@
                     </div>
                     <div style="font-size: 60px;">🌡️</div>
                 </div>
-
                 <div class="glass-card">
                     <div class="card-title">Niveles Actuales</div>
                     <div class="chart-container">
@@ -203,7 +179,6 @@
                         <div class="card-title">Estado Red</div>
                         <div id="net-status" style="font-size: 14px; font-weight: bold; color: var(--accent-cyan);">Buscando Nube...</div>
                     </div>
-                    <!-- NUEVA TARJETA: BARRIDO DE RADAR -->
                     <div class="glass-card" style="grid-column: span 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
                         <div class="card-title">Barrido de Radar</div>
                         <button id="btn-servo" class="btn-servo" onclick="toggleServo()">DESACTIVADO</button>
@@ -221,7 +196,6 @@
         // --- TEMA Y PARTÍCULAS ---
         let isDarkMode = true;
         const themeBtn = document.getElementById('theme-toggle');
-
         themeBtn.onclick = () => {
             isDarkMode = !isDarkMode;
             document.body.classList.toggle('light-mode');
@@ -229,27 +203,53 @@
             initParticles();
         };
 
-        // --- FUNCIÓN PARA ACTUALIZAR UI ---
-        function procesarDatos(data) {
-            if(data.temp !== undefined) {
-                updateValue('temp-val', data.temp.toFixed(1), '°C');
-                document.getElementById('bar-temp').style.height = (data.temp * 2) + '%';
-            }
-            if(data.hum !== undefined) {
-                updateValue('hum-val', Math.round(data.hum), '%');
-                document.getElementById('bar-hum').style.height = data.hum + '%';
-            }
-            if(data.rssi !== undefined) {
-                updateValue('rssi-val', data.rssi, 'dBm');
+        // --- FUNCIONES DE ACTUALIZACIÓN UI ---
+        function updateValue(id, value, unit) {
+            const el = document.getElementById(id);
+            const newText = `${value}<span class="unit">${unit}</span>`;
+            if (el.innerHTML !== newText) {
+                el.style.opacity = 0.5;
+                setTimeout(() => {
+                    el.innerHTML = newText;
+                    el.style.opacity = 1;
+                }, 200);
             }
         }
 
-        // --- LÓGICA DE DATOS REAL-TIME (SOLO MQTT CLOUD PARA GITHUB) ---
+        function actualizarTemperatura(temp) {
+            updateValue('temp-val', temp.toFixed(1), '°C');
+            const barra = document.getElementById('bar-temp');
+            let altura = Math.min(100, temp * 2);
+            barra.style.height = altura + '%';
+            // Descripción según temperatura
+            let desc = '';
+            if (temp < 20) desc = 'Ambiente fresco';
+            else if (temp < 30) desc = 'Temperatura normal';
+            else if (temp < 40) desc = 'Calor elevado';
+            else desc = '¡PELIGRO! Calor extremo';
+            document.getElementById('desc-val').innerText = desc;
+        }
+
+        function actualizarHumedad(hum) {
+            updateValue('hum-val', Math.round(hum), '%');
+            document.getElementById('bar-hum').style.height = hum + '%';
+        }
+
+        function actualizarRSSI(rssi) {
+            updateValue('rssi-val', rssi, 'dBm');
+            // Opcional: cambiar color según calidad
+            const el = document.getElementById('rssi-val');
+            if (rssi > -60) el.style.color = '#81C784';
+            else if (rssi > -75) el.style.color = '#FFD54F';
+            else el.style.color = '#F06292';
+        }
+
+        // --- MQTT ---
         const options = {
             connectTimeout: 4000,
             clientId: 'fxi_web_' + Math.random().toString(16).substr(2, 8),
             username: 'Admin',
-            password: 'FluxaIgnis2026', 
+            password: 'FluxaIgnis2026',
         };
 
         let client;
@@ -258,22 +258,34 @@
             client = mqtt.connect('wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt', options);
 
             client.on('connect', () => {
-                console.log('¡Conectado a HiveMQ Cloud!');
+                console.log('Conectado a HiveMQ Cloud');
                 document.getElementById('esp-status').innerText = 'Online (Cloud)';
                 document.getElementById('esp-status').style.background = 'var(--chart-green)';
-                document.getElementById('desc-val').innerText = 'Recibiendo telemetría global';
+                document.getElementById('desc-val').innerText = 'Recibiendo telemetría';
                 document.getElementById('net-status').innerText = 'Conexión a Nube Estable';
                 document.getElementById('net-status').style.color = 'var(--text-sec)';
-                
+                // Suscribirse a los dos topics necesarios
                 client.subscribe('fxi/datos');
+                client.subscribe('fxi/rssi');
             });
 
             client.on('message', (topic, message) => {
                 try {
-                    const data = JSON.parse(message.toString());
-                    procesarDatos(data);
+                    const payload = message.toString();
+                    console.log(`Mensaje en ${topic}: ${payload}`);
+                    const data = JSON.parse(payload);
+                    
+                    if (topic === 'fxi/datos') {
+                        // Datos de temperatura y humedad
+                        if (data.temp !== undefined) actualizarTemperatura(data.temp);
+                        if (data.hum !== undefined) actualizarHumedad(data.hum);
+                    } 
+                    else if (topic === 'fxi/rssi') {
+                        // Datos de RSSI
+                        if (data.rssi !== undefined) actualizarRSSI(data.rssi);
+                    }
                 } catch (e) {
-                    console.error("Error leyendo datos JSON", e);
+                    console.error('Error procesando mensaje MQTT', e);
                 }
             });
 
@@ -283,41 +295,73 @@
                 document.getElementById('net-status').innerText = 'Servidor MQTT Inaccesible';
                 document.getElementById('net-status').style.color = '#F06292';
             });
+
+            client.on('error', (err) => {
+                console.error('Error MQTT:', err);
+            });
         }
 
         function iniciarSistema() {
             document.getElementById('esp-status').innerText = 'Verificando red...';
-            
-            // Verificamos si la librería MQTT cargó correctamente
             if (typeof mqtt === 'undefined') {
-                document.getElementById('esp-status').innerText = 'Error';
+                document.getElementById('esp-status').innerText = 'Error librería';
                 document.getElementById('esp-status').style.background = 'var(--chart-pink)';
                 document.getElementById('net-status').innerText = 'Sin conexión a Internet';
                 document.getElementById('net-status').style.color = '#F06292';
-                console.error("No se pudo cargar la librería MQTT. Verifica tu conexión a internet.");
-                return; 
+                console.error("No se pudo cargar MQTT");
+                return;
             }
-
-            if(client) client.end();
+            if (client) client.end();
             setTimeout(conectarMQTT, 500);
         }
 
-        function updateValue(id, value, unit) {
-            const el = document.getElementById(id);
-            if(el.innerText !== value + unit) {
-                el.style.opacity = 0.5;
-                setTimeout(() => {
-                    el.innerHTML = `${value}<span class="unit">${unit}</span>`;
-                    el.style.opacity = 1;
-                }, 200);
+        // --- CONTROL DEL SERVO (igual que antes) ---
+        function toggleServo() {
+            const btn = document.getElementById('btn-servo');
+            btn.innerText = "ENVIANDO COMANDO...";
+            btn.style.opacity = "0.7";
+            if (typeof client !== 'undefined' && client && client.connected) {
+                client.publish('fxi/comandos', 'TOGGLE');
+                btn.style.opacity = "1";
+                if (btn.classList.contains('active')) {
+                    btn.classList.remove('active');
+                    btn.innerText = "DESACTIVADO";
+                } else {
+                    btn.classList.add('active');
+                    btn.innerText = "SISTEMA ACTIVO";
+                }
+                console.log("Comando enviado vía MQTT");
+            } else {
+                fetch('/toggleServo')
+                    .then(response => response.text())
+                    .then(state => {
+                        btn.style.opacity = "1";
+                        if(state === "ON") {
+                            btn.classList.add('active');
+                            btn.innerText = "SISTEMA ACTIVO";
+                        } else {
+                            btn.classList.remove('active');
+                            btn.innerText = "DESACTIVADO";
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Fallo local:", err);
+                        btn.classList.remove('active');
+                        btn.style.opacity = "1";
+                        btn.style.borderColor = "var(--chart-pink)";
+                        btn.innerText = "SIN CONEXIÓN";
+                        setTimeout(() => {
+                            btn.style.borderColor = "var(--accent-cyan)";
+                            btn.innerText = "DESACTIVADO (REINTENTAR)";
+                        }, 3000);
+                    });
             }
         }
 
-        // --- SISTEMA DE PARTÍCULAS ---
+        // --- PARTÍCULAS (fondo animado) ---
         const canvas = document.getElementById('weather-canvas');
         const ctx = canvas.getContext('2d');
         let particles = [];
-
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -345,82 +389,20 @@
                 ctx.fill();
             }
         }
-
         function initParticles() {
             particles = [];
             for(let i=0; i<60; i++) particles.push(new Particle());
         }
-
         function animate() {
             ctx.clearRect(0,0, canvas.width, canvas.height);
             particles.forEach(p => { p.update(); p.draw(); });
             requestAnimationFrame(animate);
         }
 
-// --- CONTROL DEL SERVO (BARRIDO DE RADAR) HÍBRIDO ---
-        function toggleServo() {
-            const btn = document.getElementById('btn-servo');
-            btn.innerText = "ENVIANDO COMANDO...";
-            btn.style.opacity = "0.7";
-
-            // 1. MODO NUBE: Si MQTT está conectado, enviamos por ahí
-            if (typeof client !== 'undefined' && client.connected) {
-                // Publicamos en un tópico nuevo para que el ESP32 lo lea
-                client.publish('fxi/comandos', 'TOGGLE');
-                
-                // Actualizamos el botón visualmente
-                btn.style.opacity = "1";
-                if (btn.classList.contains('active')) {
-                    btn.classList.remove('active');
-                    btn.innerText = "DESACTIVADO";
-                } else {
-                    btn.classList.add('active');
-                    btn.innerText = "SISTEMA ACTIVO";
-                }
-                console.log("Comando enviado vía MQTT Cloud");
-            } 
-            // 2. MODO LOCAL: Si MQTT falló, usamos fetch asumiendo que estamos en la IP del ESP32
-            else {
-                fetch('/toggleServo')
-                    .then(response => {
-                        if (!response.ok) throw new Error("Fallo HTTP");
-                        return response.text();
-                    })
-                    .then(state => {
-                        btn.style.opacity = "1";
-                        if(state === "ON") {
-                            btn.classList.add('active');
-                            btn.innerText = "SISTEMA ACTIVO";
-                        } else {
-                            btn.classList.remove('active');
-                            btn.innerText = "DESACTIVADO";
-                        }
-                        console.log("Comando enviado vía Fetch Local");
-                    })
-                    .catch(err => {
-                        console.error("Fallo de red total:", err);
-                        btn.classList.remove('active');
-                        btn.style.opacity = "1";
-                        btn.style.borderColor = "var(--chart-pink)";
-                        btn.style.color = "var(--chart-pink)";
-                        btn.innerText = "SIN CONEXIÓN";
-                        
-                        setTimeout(() => {
-                            btn.style.borderColor = "var(--accent-cyan)";
-                            btn.style.color = "var(--accent-cyan)";
-                            btn.innerText = "DESACTIVADO (REINTENTAR)";
-                        }, 3000);
-                    });
-            }
-        }
-
         // Inicializar todo
         initParticles();
         animate();
-        iniciarSistema(); // Inicia la conexión a la nube al cargar la página
-
+        iniciarSistema();
     </script>
 </body>
 </html>
-
-
