@@ -199,6 +199,15 @@
             margin-top: 10px;
             color: var(--text-sec);
         }
+        .snooze-indicator {
+            font-size: 11px;
+            margin-top: 5px;
+            color: var(--accent-cyan);
+            background: rgba(0,0,0,0.3);
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 20px;
+        }
     </style>
 </head>
 <body>
@@ -262,6 +271,7 @@
                         <div class="flame-icon" id="flameIcon">🔥</div>
                         <div class="flame-status" id="flameStatus">Estado: Normal</div>
                         <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
+                        <div id="snoozeInfo" class="snooze-indicator" style="display: none;"></div>
                     </div>
 
                     <div class="glass-card">
@@ -286,7 +296,7 @@
 
         <div class="footer">
             <button class="btn-update" onclick="iniciarSistema()">Reconectar Sistema</button>
-            <button class="btn-reset" id="resetAlertBtn">🔄 Resetear Alerta</button>
+            <button class="btn-reset" id="resetAlertBtn">🔇 Resetear Alerta (Silencio 30s)</button>
         </div>
     </div>
 
@@ -295,7 +305,9 @@
         let isDarkMode = true;
         let dangerMode = false;
         let emergenciaActivaPorMQTT = false;
-        let simulationActive = false;   // estado de simulación (opcional)
+        let simulationActive = false;
+        let manualSilenceUntil = 0;      // timestamp hasta el cual no se activa alerta por temperatura
+        let silenceTimeout = null;
         
         let tempHistory = [];
         let currentPoints = 20;
@@ -354,7 +366,13 @@
         }
 
         // --- MANEJO DE ALERTA VISUAL ---
-        function setDangerMode(active, motivo = "") {
+        function setDangerMode(active, motivo = "", isMqttEmergency = false) {
+            // Si estamos en modo silencio manual y la activación viene de temperatura (no es MQTT), la ignoramos
+            const now = Date.now();
+            if (!isMqttEmergency && now < manualSilenceUntil) {
+                console.log("Modo silencio activo, ignorando activación por temperatura");
+                return;
+            }
             if (active === dangerMode) return;
             dangerMode = active;
             if (dangerMode) {
@@ -372,32 +390,44 @@
             }
         }
 
-        // Resetear alerta manualmente
+        // Resetear alerta con silencio temporal
         function resetAlerta() {
+            // Desactivar modo peligro visual
+            setDangerMode(false, "");
+            // Limpiar banderas
             emergenciaActivaPorMQTT = false;
-            // Si la simulación está activa, opcionalmente podemos enviar comando para apagarla
+            // Activar modo silencio por 30 segundos
+            const now = Date.now();
+            manualSilenceUntil = now + 30000;
+            if (silenceTimeout) clearTimeout(silenceTimeout);
+            silenceTimeout = setTimeout(() => {
+                manualSilenceUntil = 0;
+                document.getElementById('snoozeInfo').style.display = 'none';
+                // Al finalizar el silencio, si la temperatura sigue siendo crítica, reactivar alerta
+                const tempActual = parseFloat(document.getElementById('temp-val').innerText);
+                if (!isNaN(tempActual) && tempActual >= 40.0 && !emergenciaActivaPorMQTT) {
+                    setDangerMode(true, "Temperatura crítica > 40°C (fin silencio)");
+                }
+            }, 30000);
+            // Mostrar indicador de silencio
+            const snoozeDiv = document.getElementById('snoozeInfo');
+            snoozeDiv.style.display = 'block';
+            snoozeDiv.innerText = '🔇 Alerta silenciada por 30s (solo temperatura)';
+            // Opcional: enviar comando para apagar simulación si está activa
             if (simulationActive && client && client.connected) {
                 client.publish('fxi/simular', 'FUEGO_OFF');
                 simulationActive = false;
             }
-            // Si la temperatura actual es segura (<38°C) desactivar modo peligro
-            const tempActual = parseFloat(document.getElementById('temp-val').innerText);
-            if (!isNaN(tempActual) && tempActual < 38) {
-                setDangerMode(false, "");
-            } else if (tempActual >= 38) {
-                // Si aún hay temperatura alta, mostrar mensaje pero no desactivar por completo
-                setDangerMode(true, "Temperatura elevada (reset manual)");
-                emergenciaActivaPorMQTT = false; // permitir que luego baje y se desactive solo
-            } else {
-                setDangerMode(false, "");
-            }
-            // Actualizar estado de red temporal
+            // También podemos publicar un comando de reset al ESP32 si se desea (opcional)
+            // client.publish('fxi/comandos', 'RESET_ALERT');
+            
+            // Actualizar estado en red
             const statusDiv = document.getElementById('net-status');
-            statusDiv.innerText = "Alerta reiniciada manualmente";
+            statusDiv.innerText = "Alerta reiniciada - Silencio 30s";
             setTimeout(() => {
                 if (!dangerMode) statusDiv.innerText = "Conexión Estable";
                 else statusDiv.innerText = "Modo peligro activo";
-            }, 2000);
+            }, 3000);
         }
 
         // --- ACTUALIZACIÓN DE UI ---
@@ -413,11 +443,13 @@
             else desc = '¡PELIGRO! Calor extremo';
             document.getElementById('desc-val').innerText = desc;
             
-            // Lógica de alerta por temperatura (solo si no hay emergencia MQTT activa)
+            // Lógica de alerta por temperatura (solo si no hay emergencia MQTT activa y no estamos en silencio)
             if (tempVal >= 40.0 && !emergenciaActivaPorMQTT) {
-                setDangerMode(true, "Temperatura crítica > 40°C");
+                // Intentar activar modo peligro (respeta silencio)
+                setDangerMode(true, "Temperatura crítica > 40°C", false);
             } else if (tempVal < 38.0 && !emergenciaActivaPorMQTT && dangerMode) {
-                setDangerMode(false);
+                // Si la temperatura baja lo suficiente, desactivar alerta (si no hay emergencia MQTT)
+                setDangerMode(false, "");
             }
         }
 
@@ -454,10 +486,15 @@
                 client.subscribe('fxi/datos');
                 client.subscribe('fxi/rssi');
                 client.subscribe('fxi/emergencia');
-                client.subscribe('fxi/simular');   // suscripción para saber estado de simulación
+                client.subscribe('fxi/simular');
                 emergenciaActivaPorMQTT = false;
                 simulationActive = false;
-                if (!dangerMode) setDangerMode(false);
+                // Al reconectar, si hay silencio activo lo respetamos
+                if (Date.now() < manualSilenceUntil) {
+                    document.getElementById('snoozeInfo').style.display = 'block';
+                } else {
+                    document.getElementById('snoozeInfo').style.display = 'none';
+                }
             });
 
             client.on('message', (topic, message) => {
@@ -478,25 +515,34 @@
                     }
                     else if (topic === 'fxi/emergencia') {
                         const data = JSON.parse(payload);
-                        setDangerMode(true, data.motivo || "Incendio detectado");
+                        // Las emergencias MQTT SIEMPRE activan la alerta, incluso en modo silencio
+                        // Pero respetamos el silencio? No, porque es una emergencia real. Forzamos activación.
+                        // Sin embargo, si el usuario quiere ignorarlas durante silencio, podemos añadir una opción.
+                        // Por seguridad, siempre activamos.
+                        setDangerMode(true, data.motivo || "Incendio detectado", true);
                         emergenciaActivaPorMQTT = true;
+                        // Si hay silencio, lo cancelamos porque la emergencia es prioritaria
+                        if (manualSilenceUntil > Date.now()) {
+                            manualSilenceUntil = 0;
+                            if (silenceTimeout) clearTimeout(silenceTimeout);
+                            document.getElementById('snoozeInfo').style.display = 'none';
+                        }
                         if (Notification.permission === "granted") {
                             new Notification("🚨 ALERTA FLUXA IGNIS", { body: data.motivo + " | Temp: " + data.temperatura + "°C" });
                         }
                     }
                     else if (topic === 'fxi/simular') {
-                        // Actualizar estado de simulación
                         if (payload === 'FUEGO_ON') {
                             simulationActive = true;
                             console.log("Simulación activada");
                         } else if (payload === 'FUEGO_OFF') {
                             simulationActive = false;
                             console.log("Simulación desactivada");
-                            // Si la alerta fue por simulación, podemos intentar resetear si la temperatura es segura
+                            // Si la alerta fue por simulación y ya no hay emergencia MQTT, podemos intentar resetear si temperatura es segura
                             const tempActual = parseFloat(document.getElementById('temp-val').innerText);
                             if (tempActual < 38 && emergenciaActivaPorMQTT) {
                                 emergenciaActivaPorMQTT = false;
-                                setDangerMode(false);
+                                setDangerMode(false, "");
                             }
                         }
                     }
@@ -572,7 +618,7 @@
         // --- BOTÓN RESETEAR ALERTA ---
         document.getElementById('resetAlertBtn').addEventListener('click', resetAlerta);
 
-        // --- TEMA Y PARTÍCULAS (igual) ---
+        // --- TEMA Y PARTÍCULAS ---
         const themeBtn = document.getElementById('theme-toggle');
         themeBtn.onclick = () => {
             isDarkMode = !isDarkMode;
