@@ -133,16 +133,10 @@
             background: rgba(122, 240, 212, 0.1);
             transform: translateY(-2px);
         }
-        /* Tarjeta especial del sensor de llama */
+        /* Tarjeta de llama dentro del grid */
         .flame-card {
             text-align: center;
-            background: var(--glass-bg);
-            border: 2px solid var(--glass-border);
-            border-radius: 28px;
-            padding: 20px;
-            backdrop-filter: blur(15px);
-            transition: all 0.3s ease;
-            margin-bottom: 25px;
+            cursor: pointer;
         }
         .flame-icon {
             font-size: 70px;
@@ -168,10 +162,41 @@
             font-weight: bold;
             margin-top: 10px;
         }
-        /* Contenedor de la gráfica */
+        /* Gráfica y controles */
         .chart-wrapper {
             height: 200px;
             margin-top: 15px;
+        }
+        .range-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .range-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 4px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .range-btn.active {
+            background: var(--accent-cyan);
+            color: #0B3954;
+        }
+        .range-btn:hover {
+            background: var(--accent-cyan);
+            color: #0B3954;
+        }
+        .avg-text {
+            font-size: 12px;
+            text-align: center;
+            margin-top: 10px;
+            color: var(--text-sec);
         }
     </style>
 </head>
@@ -185,17 +210,9 @@
                     <div style="font-weight: 600; font-size: 18px;">Módulo ESP32</div>
                     <span id="esp-status">Conectando...</span>
                 </div>
-                <div style="font-size: 12px; color: var(--text-sec);">Sistema de nube Activo</div>
+                <div style="font-size: 12px; color: var(--text-sec);">Sistema Activo</div>
             </div>
             <div id="theme-toggle">✳</div>
-        </div>
-
-        <!-- Tarjeta destacada: Sensor de Llama -->
-        <div class="flame-card" id="flameCard">
-            <div class="card-title">Sensor de Llama KY-026</div>
-            <div class="flame-icon" id="flameIcon">🔥</div>
-            <div class="flame-status" id="flameStatus">Estado: Normal</div>
-            <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
         </div>
 
         <div class="dashboard-grid">
@@ -223,17 +240,31 @@
                     </div>
                 </div>
 
-                <!-- Gráfica de tendencias de temperatura -->
+                <!-- Gráfica de tendencias con temperatura y humedad -->
                 <div class="glass-card">
-                    <div class="card-title">Tendencia de Temperatura (últimos 20 registros)</div>
+                    <div class="card-title">Tendencias (Temp / Hum)</div>
                     <div class="chart-wrapper">
-                        <canvas id="tempChart" width="400" height="160"></canvas>
+                        <canvas id="tempHumChart" width="400" height="160"></canvas>
                     </div>
+                    <div class="range-buttons">
+                        <button class="range-btn" data-points="20">20 últimos</button>
+                        <button class="range-btn" data-points="50">50 últimos</button>
+                        <button class="range-btn" data-points="100">100 últimos</button>
+                        <button class="range-btn" data-points="200">200 últimos</button>
+                    </div>
+                    <div class="avg-text" id="avgText">Promedio: --</div>
                 </div>
             </div>
 
             <div class="right-column">
                 <div class="right-grid">
+                    <!-- Tarjeta de FUEGO: ocupa 2 columnas -->
+                    <div class="glass-card flame-card" style="grid-column: span 2;" id="flameCard">
+                        <div class="flame-icon" id="flameIcon">🔥</div>
+                        <div class="flame-status" id="flameStatus">Estado: Normal</div>
+                        <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
+                    </div>
+
                     <div class="glass-card">
                         <div class="card-title">Humedad</div>
                         <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
@@ -242,11 +273,11 @@
                         <div class="card-title">Señal RSSI</div>
                         <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
                     </div>
-                    <div class="glass-card" style="grid-column: span 1;">
+                    <div class="glass-card">
                         <div class="card-title">Estado Red</div>
                         <div id="net-status" style="font-size: 14px; font-weight: bold; color: var(--accent-cyan);">Buscando Nube...</div>
                     </div>
-                    <div class="glass-card" style="grid-column: span 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
+                    <div class="glass-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
                         <div class="card-title">Barrido de Radar</div>
                         <button id="btn-servo" class="btn-servo" onclick="toggleServo()">DESACTIVADO</button>
                     </div>
@@ -262,62 +293,111 @@
     <script>
         // --- VARIABLES GLOBALES ---
         let isDarkMode = true;
-        let dangerMode = false;       // indica si hay alerta activa
-        let tempHistory = [];          // almacena últimos valores de temperatura
-        let ctxChart = null;           // instancia de Chart.js
-        const MAX_HISTORY = 20;
+        let dangerMode = false;
+        let emergenciaActivaPorMQTT = false;
+        
+        // Historiales para la gráfica
+        let tempHistory = [];     // array de objetos {temp, hum, timestamp}
+        let currentPoints = 20;   // cantidad de puntos a mostrar
+        
+        let ctxChart = null;       // instancia de Chart.js
 
-        // --- INICIALIZAR GRÁFICA ---
+        // --- INICIALIZAR GRÁFICA (con dos datasets) ---
         function initChart() {
-            const canvas = document.getElementById('tempChart');
+            const canvas = document.getElementById('tempHumChart');
             if (ctxChart) ctxChart.destroy();
             ctxChart = new Chart(canvas, {
                 type: 'line',
                 data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Temperatura (°C)',
-                        data: [],
-                        borderColor: '#F06292',
-                        backgroundColor: 'rgba(240, 98, 146, 0.1)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#F06292'
-                    }]
+                    datasets: [
+                        {
+                            label: 'Temperatura (°C)',
+                            data: [],
+                            borderColor: '#F06292',
+                            backgroundColor: 'rgba(240, 98, 146, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            pointBackgroundColor: '#F06292',
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Humedad (%)',
+                            data: [],
+                            borderColor: '#4FC3F7',
+                            backgroundColor: 'rgba(79, 195, 247, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            pointBackgroundColor: '#4FC3F7',
+                            yAxisID: 'y1'
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
                     scales: {
-                        y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.1)' }, title: { display: true, text: '°C' } },
-                        x: { title: { display: true, text: 'Tiempo (últimos datos)' }, ticks: { maxRotation: 45, autoSkip: true } }
+                        y: { 
+                            beginAtZero: false, 
+                            grid: { color: 'rgba(255,255,255,0.1)' }, 
+                            title: { display: true, text: '°C', color: '#F06292' } 
+                        },
+                        y1: {
+                            position: 'right',
+                            beginAtZero: false,
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: '%', color: '#4FC3F7' }
+                        },
+                        x: { title: { display: true, text: 'Registros (más reciente a la derecha)' }, ticks: { maxRotation: 45, autoSkip: true } }
                     },
                     plugins: { legend: { labels: { color: '#fff' } } }
                 }
             });
-            // Ajustar color de ejes según modo oscuro/claro después
+            updateChartDisplay();
         }
 
-        function updateChart(newTemp) {
-            if (!ctxChart) initChart();
-            tempHistory.push(newTemp);
-            if (tempHistory.length > MAX_HISTORY) tempHistory.shift();
-            // Actualizar etiquetas: índices 1..N
-            const labels = tempHistory.map((_, idx) => idx + 1);
+        // Actualizar gráfica según currentPoints y promedios
+        function updateChartDisplay() {
+            if (!ctxChart) return;
+            const total = tempHistory.length;
+            const start = Math.max(0, total - currentPoints);
+            const sliced = tempHistory.slice(start);
+            const temps = sliced.map(p => p.temp);
+            const hums = sliced.map(p => p.hum);
+            const labels = sliced.map((_, idx) => idx+1);
+            
             ctxChart.data.labels = labels;
-            ctxChart.data.datasets[0].data = [...tempHistory];
+            ctxChart.data.datasets[0].data = temps;
+            ctxChart.data.datasets[1].data = hums;
             ctxChart.update();
+            
+            // Calcular promedios
+            if (temps.length > 0) {
+                const avgTemp = (temps.reduce((a,b) => a+b,0) / temps.length).toFixed(1);
+                const avgHum = (hums.reduce((a,b) => a+b,0) / hums.length).toFixed(0);
+                document.getElementById('avgText').innerHTML = `📊 Promedio (últimos ${currentPoints}): Temp ${avgTemp}°C / Hum ${avgHum}%`;
+            } else {
+                document.getElementById('avgText').innerHTML = `Promedio: --`;
+            }
         }
 
-        // --- MANEJO DE LA ALERTA VISUAL GLOBAL ---
+        // Agregar nuevo dato a historial
+        function addDataPoint(temp, hum) {
+            tempHistory.push({ temp: temp, hum: hum, timestamp: Date.now() });
+            // Limitar historial a 500 para no sobrecargar
+            if (tempHistory.length > 500) tempHistory.shift();
+            updateChartDisplay();
+        }
+
+        // --- MANEJO DE ALERTA VISUAL GLOBAL ---
         function setDangerMode(active, motivo = "") {
             if (active === dangerMode) return;
             dangerMode = active;
             if (dangerMode) {
                 document.body.classList.add('danger-alert');
-                // Actualizar el indicador de llama si no se hizo ya por emergencia
                 document.getElementById('flameIcon').classList.add('danger');
                 document.getElementById('flameIcon').classList.remove('normal');
                 document.getElementById('flameStatus').innerHTML = `⚠️ ¡PELIGRO! ${motivo || "Incendio detectado"}`;
@@ -331,7 +411,7 @@
             }
         }
 
-        // --- ACTUALIZACIÓN DE UI (valores, gráfica, etc.) ---
+        // --- ACTUALIZACIÓN DE UI ---
         function actualizarTemperatura(temp) {
             updateValue('temp-val', temp.toFixed(1), '°C');
             const barra = document.getElementById('bar-temp');
@@ -343,18 +423,13 @@
             else if (temp < 40) desc = 'Calor elevado';
             else desc = '¡PELIGRO! Calor extremo';
             document.getElementById('desc-val').innerText = desc;
-            // Añadir a la gráfica de tendencias
-            updateChart(temp);
-            // Lógica de alerta por temperatura crítica
+            
             if (temp >= 40.0 && !dangerMode) {
                 setDangerMode(true, "Temperatura crítica > 40°C");
             } else if (temp < 38.0 && dangerMode && !emergenciaActivaPorMQTT) {
-                // Si la temperatura baja y no hay una emergencia MQTT activa, desactivar alerta
                 setDangerMode(false);
             }
         }
-
-        let emergenciaActivaPorMQTT = false; // para saber si una emergencia MQTT mantiene la alerta
 
         function actualizarHumedad(hum) {
             updateValue('hum-val', Math.round(hum), '%');
@@ -381,23 +456,19 @@
             }
         }
 
-        // --- MANEJO DE EMERGENCIA (desde MQTT) ---
+        // --- MANEJO DE EMERGENCIA MQTT ---
         function manejarEmergencia(payload) {
             try {
                 const data = JSON.parse(payload);
                 const motivo = data.motivo || "Incendio detectado";
                 const temp = data.temperatura;
-                console.log("EMERGENCIA RECIBIDA:", motivo);
-                // Activar alerta global y actualizar llama
                 setDangerMode(true, motivo);
                 emergenciaActivaPorMQTT = true;
-                // Si se desea, se puede mostrar también una notificación del navegador
                 if (Notification.permission === "granted") {
                     new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo + " | Temp: " + temp + "°C" });
                 } else if (Notification.permission !== "denied") {
                     Notification.requestPermission();
                 }
-                // Opcional: mostrar un mensaje temporal en la interfaz
                 const statusDiv = document.getElementById('net-status');
                 const originalText = statusDiv.innerText;
                 statusDiv.innerText = "🔴 ¡EMERGENCIA ACTIVA! " + motivo;
@@ -408,9 +479,7 @@
                         statusDiv.style.color = "var(--text-sec)";
                     }
                 }, 8000);
-            } catch (e) {
-                console.error("Error al procesar emergencia", e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         // --- MQTT ---
@@ -426,17 +495,15 @@
             client = mqtt.connect('wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt', options);
 
             client.on('connect', () => {
-                console.log('Conectado a HiveMQ Cloud');
-                document.getElementById('esp-status').innerText = 'Online (Cloud)';
+                console.log('Conectado a HiveMQ');
+                document.getElementById('esp-status').innerText = 'Online';
                 document.getElementById('esp-status').style.background = 'var(--chart-green)';
                 document.getElementById('desc-val').innerText = 'Recibiendo telemetría';
-                document.getElementById('net-status').innerText = 'Conexión a Nube Estable';
+                document.getElementById('net-status').innerText = 'Conexión Estable';
                 document.getElementById('net-status').style.color = 'var(--text-sec)';
-                // Suscribirse a los topics necesarios
                 client.subscribe('fxi/datos');
                 client.subscribe('fxi/rssi');
                 client.subscribe('fxi/emergencia');
-                // Reiniciar estado de emergencia por MQTT al reconectar
                 emergenciaActivaPorMQTT = false;
                 if (!dangerMode) setDangerMode(false);
             });
@@ -444,11 +511,17 @@
             client.on('message', (topic, message) => {
                 try {
                     const payload = message.toString();
-                    console.log(`Mensaje en ${topic}: ${payload}`);
                     if (topic === 'fxi/datos') {
                         const data = JSON.parse(payload);
-                        if (data.temp !== undefined) actualizarTemperatura(data.temp);
-                        if (data.hum !== undefined) actualizarHumedad(data.hum);
+                        if (data.temp !== undefined && data.hum !== undefined) {
+                            actualizarTemperatura(data.temp);
+                            actualizarHumedad(data.hum);
+                            addDataPoint(data.temp, data.hum);
+                        } else if (data.temp !== undefined) {
+                            actualizarTemperatura(data.temp);
+                        } else if (data.hum !== undefined) {
+                            actualizarHumedad(data.hum);
+                        }
                     } 
                     else if (topic === 'fxi/rssi') {
                         const data = JSON.parse(payload);
@@ -457,43 +530,33 @@
                     else if (topic === 'fxi/emergencia') {
                         manejarEmergencia(payload);
                     }
-                } catch (e) {
-                    console.error('Error procesando mensaje MQTT', e);
-                }
+                } catch (e) { console.error(e); }
             });
 
             client.on('offline', () => {
-                document.getElementById('esp-status').innerText = 'Offline (Cloud)';
+                document.getElementById('esp-status').innerText = 'Offline';
                 document.getElementById('esp-status').style.background = 'var(--chart-pink)';
                 document.getElementById('net-status').innerText = 'Servidor MQTT Inaccesible';
                 document.getElementById('net-status').style.color = '#F06292';
-            });
-
-            client.on('error', (err) => {
-                console.error('Error MQTT:', err);
             });
         }
 
         function iniciarSistema() {
             document.getElementById('esp-status').innerText = 'Verificando red...';
             if (typeof mqtt === 'undefined') {
-                document.getElementById('esp-status').innerText = 'Error librería';
-                document.getElementById('esp-status').style.background = 'var(--chart-pink)';
-                document.getElementById('net-status').innerText = 'Sin conexión a Internet';
-                document.getElementById('net-status').style.color = '#F06292';
-                console.error("No se pudo cargar MQTT");
+                document.getElementById('esp-status').innerText = 'Error';
                 return;
             }
             if (client) client.end();
             setTimeout(conectarMQTT, 500);
         }
 
-        // --- CONTROL DEL SERVO (igual que antes) ---
+        // --- CONTROL DEL SERVO ---
         function toggleServo() {
             const btn = document.getElementById('btn-servo');
-            btn.innerText = "ENVIANDO COMANDO...";
+            btn.innerText = "ENVIANDO...";
             btn.style.opacity = "0.7";
-            if (typeof client !== 'undefined' && client && client.connected) {
+            if (client && client.connected) {
                 client.publish('fxi/comandos', 'TOGGLE');
                 btn.style.opacity = "1";
                 if (btn.classList.contains('active')) {
@@ -503,7 +566,6 @@
                     btn.classList.add('active');
                     btn.innerText = "SISTEMA ACTIVO";
                 }
-                console.log("Comando enviado vía MQTT");
             } else {
                 fetch('/toggleServo')
                     .then(response => response.text())
@@ -517,28 +579,34 @@
                             btn.innerText = "DESACTIVADO";
                         }
                     })
-                    .catch(err => {
-                        console.error("Fallo local:", err);
+                    .catch(() => {
                         btn.classList.remove('active');
                         btn.style.opacity = "1";
-                        btn.style.borderColor = "var(--chart-pink)";
                         btn.innerText = "SIN CONEXIÓN";
-                        setTimeout(() => {
-                            btn.style.borderColor = "var(--accent-cyan)";
-                            btn.innerText = "DESACTIVADO (REINTENTAR)";
-                        }, 3000);
+                        setTimeout(() => { btn.innerText = "DESACTIVADO"; }, 3000);
                     });
             }
         }
 
-        // --- TEMA Y PARTÍCULAS (sin cambios) ---
+        // --- RANGO DE PUNTOS PARA GRÁFICA ---
+        document.querySelectorAll('.range-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentPoints = parseInt(btn.getAttribute('data-points'), 10);
+                updateChartDisplay();
+            });
+        });
+        // Activar botón por defecto (20)
+        document.querySelector('.range-btn[data-points="20"]').classList.add('active');
+
+        // --- TEMA Y PARTÍCULAS ---
         const themeBtn = document.getElementById('theme-toggle');
         themeBtn.onclick = () => {
             isDarkMode = !isDarkMode;
             document.body.classList.toggle('light-mode');
             themeBtn.innerText = isDarkMode ? '✳' : '☀️';
             initParticles();
-            // Actualizar colores del gráfico según tema (opcional)
             if (ctxChart) {
                 const fontColor = isDarkMode ? '#fff' : '#0B3954';
                 ctxChart.options.plugins.legend.labels.color = fontColor;
@@ -547,17 +615,12 @@
             }
         };
 
-        // --- PARTÍCULAS ---
+        // Partículas (fondo)
         const canvas = document.getElementById('weather-canvas');
-        const ctx = canvas.getContext('2d');
+        const ctxP = canvas.getContext('2d');
         let particles = [];
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.onresize = resize;
-        resize();
-
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.onresize = resize; resize();
         class Particle {
             constructor() { this.reset(); }
             reset() {
@@ -572,32 +635,18 @@
                 if(this.alpha > 1 || this.alpha < 0) this.speed *= -1;
             }
             draw() {
-                ctx.fillStyle = isDarkMode ? `rgba(234, 226, 209,${this.alpha * 0.2})` : `rgba(11, 57, 84,${this.alpha * 0.1})`;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
-                ctx.fill();
+                ctxP.fillStyle = isDarkMode ? `rgba(234, 226, 209,${this.alpha * 0.2})` : `rgba(11, 57, 84,${this.alpha * 0.1})`;
+                ctxP.beginPath();
+                ctxP.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctxP.fill();
             }
         }
-        function initParticles() {
-            particles = [];
-            for(let i=0; i<60; i++) particles.push(new Particle());
-        }
-        function animate() {
-            ctx.clearRect(0,0, canvas.width, canvas.height);
-            particles.forEach(p => { p.update(); p.draw(); });
-            requestAnimationFrame(animate);
-        }
-
-        // Inicialización completa
-        initParticles();
-        animate();
+        function initParticles() { particles = []; for(let i=0;i<60;i++) particles.push(new Particle()); }
+        function animate() { ctxP.clearRect(0,0,canvas.width,canvas.height); particles.forEach(p=>{p.update(); p.draw();}); requestAnimationFrame(animate); }
+        initParticles(); animate();
         initChart();
         iniciarSistema();
-
-        // Solicitar permiso para notificaciones del navegador
-        if (Notification.permission === "default") {
-            Notification.requestPermission();
-        }
+        if (Notification.permission === "default") Notification.requestPermission();
     </script>
 </body>
 </html>
