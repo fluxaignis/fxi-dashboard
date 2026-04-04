@@ -43,7 +43,6 @@
             min-height: 100vh; overflow-x: hidden;
             transition: background 0.5s ease;
         }
-        /* Efecto de alerta global: borde brillante en todas las tarjetas */
         body.danger-alert .glass-card {
             box-shadow: 0 0 15px var(--danger-glow), 0 0 30px rgba(255, 61, 0, 0.3);
             border-color: var(--flame-danger);
@@ -91,14 +90,18 @@
         .bar-group { width: 35px; text-align: center; }
         .bar-bg { height: 80px; background: rgba(0,0,0,0.1); border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
         .bar-fill { width: 100%; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
-        .footer { margin-top: 40px; display: flex; justify-content: center; }
-        .btn-update {
+        .footer { margin-top: 40px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
+        .btn-update, .btn-reset {
             background: var(--accent-blue); color: #0B3954; border: none;
             padding: 12px 30px; border-radius: 50px; font-weight: 700; cursor: pointer;
             box-shadow: 0 4px 15px rgba(234, 226, 209, 0.2);
             transition: all 0.3s ease;
         }
-        .btn-update:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(234, 226, 209, 0.4); }
+        .btn-reset {
+            background: var(--chart-pink);
+            color: white;
+        }
+        .btn-update:hover, .btn-reset:hover { transform: translateY(-2px); }
         #esp-status { font-size: 10px; padding: 3px 8px; border-radius: 10px; color: #fff; background: var(--chart-pink); }
         @media (max-width: 850px) {
             .dashboard-grid { grid-template-columns: 1fr; }
@@ -133,7 +136,6 @@
             background: rgba(122, 240, 212, 0.1);
             transform: translateY(-2px);
         }
-        /* Tarjeta de llama dentro del grid */
         .flame-card {
             text-align: center;
             cursor: pointer;
@@ -162,7 +164,6 @@
             font-weight: bold;
             margin-top: 10px;
         }
-        /* Gráfica y controles */
         .chart-wrapper {
             height: 200px;
             margin-top: 15px;
@@ -240,7 +241,6 @@
                     </div>
                 </div>
 
-                <!-- Gráfica de tendencias con temperatura y humedad -->
                 <div class="glass-card">
                     <div class="card-title">Tendencias (Temp / Hum)</div>
                     <div class="chart-wrapper">
@@ -258,7 +258,6 @@
 
             <div class="right-column">
                 <div class="right-grid">
-                    <!-- Tarjeta de FUEGO: ocupa 2 columnas -->
                     <div class="glass-card flame-card" style="grid-column: span 2;" id="flameCard">
                         <div class="flame-icon" id="flameIcon">🔥</div>
                         <div class="flame-status" id="flameStatus">Estado: Normal</div>
@@ -287,6 +286,7 @@
 
         <div class="footer">
             <button class="btn-update" onclick="iniciarSistema()">Reconectar Sistema</button>
+            <button class="btn-reset" id="resetAlertBtn">🔄 Resetear Alerta</button>
         </div>
     </div>
 
@@ -295,14 +295,14 @@
         let isDarkMode = true;
         let dangerMode = false;
         let emergenciaActivaPorMQTT = false;
+        let simulationActive = false;   // estado de simulación (opcional)
         
-        // Historiales para la gráfica
-        let tempHistory = [];     // array de objetos {temp, hum, timestamp}
-        let currentPoints = 20;   // cantidad de puntos a mostrar
-        
-        let ctxChart = null;       // instancia de Chart.js
+        let tempHistory = [];
+        let currentPoints = 20;
+        let ctxChart = null;
+        let client = null;
 
-        // --- INICIALIZAR GRÁFICA (con dos datasets) ---
+        // --- INICIALIZAR GRÁFICA ---
         function initChart() {
             const canvas = document.getElementById('tempHumChart');
             if (ctxChart) ctxChart.destroy();
@@ -310,48 +310,16 @@
                 type: 'line',
                 data: {
                     datasets: [
-                        {
-                            label: 'Temperatura (°C)',
-                            data: [],
-                            borderColor: '#F06292',
-                            backgroundColor: 'rgba(240, 98, 146, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 2,
-                            pointBackgroundColor: '#F06292',
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Humedad (%)',
-                            data: [],
-                            borderColor: '#4FC3F7',
-                            backgroundColor: 'rgba(79, 195, 247, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 2,
-                            pointBackgroundColor: '#4FC3F7',
-                            yAxisID: 'y1'
-                        }
+                        { label: 'Temperatura (°C)', data: [], borderColor: '#F06292', backgroundColor: 'rgba(240,98,146,0.1)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 2, yAxisID: 'y' },
+                        { label: 'Humedad (%)', data: [], borderColor: '#4FC3F7', backgroundColor: 'rgba(79,195,247,0.1)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 2, yAxisID: 'y1' }
                     ]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
+                    responsive: true, maintainAspectRatio: true,
                     scales: {
-                        y: { 
-                            beginAtZero: false, 
-                            grid: { color: 'rgba(255,255,255,0.1)' }, 
-                            title: { display: true, text: '°C', color: '#F06292' } 
-                        },
-                        y1: {
-                            position: 'right',
-                            beginAtZero: false,
-                            grid: { drawOnChartArea: false },
-                            title: { display: true, text: '%', color: '#4FC3F7' }
-                        },
-                        x: { title: { display: true, text: 'Registros (más reciente a la derecha)' }, ticks: { maxRotation: 45, autoSkip: true } }
+                        y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.1)' }, title: { display: true, text: '°C', color: '#F06292' } },
+                        y1: { position: 'right', beginAtZero: false, grid: { drawOnChartArea: false }, title: { display: true, text: '%', color: '#4FC3F7' } },
+                        x: { title: { display: true, text: 'Registros' }, ticks: { maxRotation: 45 } }
                     },
                     plugins: { legend: { labels: { color: '#fff' } } }
                 }
@@ -359,40 +327,33 @@
             updateChartDisplay();
         }
 
-        // Actualizar gráfica según currentPoints y promedios
         function updateChartDisplay() {
             if (!ctxChart) return;
-            const total = tempHistory.length;
-            const start = Math.max(0, total - currentPoints);
+            const start = Math.max(0, tempHistory.length - currentPoints);
             const sliced = tempHistory.slice(start);
             const temps = sliced.map(p => p.temp);
             const hums = sliced.map(p => p.hum);
-            const labels = sliced.map((_, idx) => idx+1);
-            
+            const labels = sliced.map((_, i) => i+1);
             ctxChart.data.labels = labels;
             ctxChart.data.datasets[0].data = temps;
             ctxChart.data.datasets[1].data = hums;
             ctxChart.update();
-            
-            // Calcular promedios
-            if (temps.length > 0) {
-                const avgTemp = (temps.reduce((a,b) => a+b,0) / temps.length).toFixed(1);
-                const avgHum = (hums.reduce((a,b) => a+b,0) / hums.length).toFixed(0);
+            if (temps.length) {
+                const avgTemp = (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1);
+                const avgHum = (hums.reduce((a,b)=>a+b,0)/hums.length).toFixed(0);
                 document.getElementById('avgText').innerHTML = `📊 Promedio (últimos ${currentPoints}): Temp ${avgTemp}°C / Hum ${avgHum}%`;
             } else {
                 document.getElementById('avgText').innerHTML = `Promedio: --`;
             }
         }
 
-        // Agregar nuevo dato a historial
         function addDataPoint(temp, hum) {
-            tempHistory.push({ temp: temp, hum: hum, timestamp: Date.now() });
-            // Limitar historial a 500 para no sobrecargar
+            tempHistory.push({ temp, hum, timestamp: Date.now() });
             if (tempHistory.length > 500) tempHistory.shift();
             updateChartDisplay();
         }
 
-        // --- MANEJO DE ALERTA VISUAL GLOBAL ---
+        // --- MANEJO DE ALERTA VISUAL ---
         function setDangerMode(active, motivo = "") {
             if (active === dangerMode) return;
             dangerMode = active;
@@ -411,75 +372,66 @@
             }
         }
 
+        // Resetear alerta manualmente
+        function resetAlerta() {
+            emergenciaActivaPorMQTT = false;
+            // Si la simulación está activa, opcionalmente podemos enviar comando para apagarla
+            if (simulationActive && client && client.connected) {
+                client.publish('fxi/simular', 'FUEGO_OFF');
+                simulationActive = false;
+            }
+            // Si la temperatura actual es segura (<38°C) desactivar modo peligro
+            const tempActual = parseFloat(document.getElementById('temp-val').innerText);
+            if (!isNaN(tempActual) && tempActual < 38) {
+                setDangerMode(false, "");
+            } else if (tempActual >= 38) {
+                // Si aún hay temperatura alta, mostrar mensaje pero no desactivar por completo
+                setDangerMode(true, "Temperatura elevada (reset manual)");
+                emergenciaActivaPorMQTT = false; // permitir que luego baje y se desactive solo
+            } else {
+                setDangerMode(false, "");
+            }
+            // Actualizar estado de red temporal
+            const statusDiv = document.getElementById('net-status');
+            statusDiv.innerText = "Alerta reiniciada manualmente";
+            setTimeout(() => {
+                if (!dangerMode) statusDiv.innerText = "Conexión Estable";
+                else statusDiv.innerText = "Modo peligro activo";
+            }, 2000);
+        }
+
         // --- ACTUALIZACIÓN DE UI ---
         function actualizarTemperatura(temp) {
-            updateValue('temp-val', temp.toFixed(1), '°C');
-            const barra = document.getElementById('bar-temp');
-            let altura = Math.min(100, temp * 2);
-            barra.style.height = altura + '%';
+            const tempVal = parseFloat(temp);
+            document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
+            let altura = Math.min(100, tempVal * 2);
+            document.getElementById('bar-temp').style.height = altura + '%';
             let desc = '';
-            if (temp < 20) desc = 'Ambiente fresco';
-            else if (temp < 30) desc = 'Temperatura normal';
-            else if (temp < 40) desc = 'Calor elevado';
+            if (tempVal < 20) desc = 'Ambiente fresco';
+            else if (tempVal < 30) desc = 'Temperatura normal';
+            else if (tempVal < 40) desc = 'Calor elevado';
             else desc = '¡PELIGRO! Calor extremo';
             document.getElementById('desc-val').innerText = desc;
             
-            if (temp >= 40.0 && !dangerMode) {
+            // Lógica de alerta por temperatura (solo si no hay emergencia MQTT activa)
+            if (tempVal >= 40.0 && !emergenciaActivaPorMQTT) {
                 setDangerMode(true, "Temperatura crítica > 40°C");
-            } else if (temp < 38.0 && dangerMode && !emergenciaActivaPorMQTT) {
+            } else if (tempVal < 38.0 && !emergenciaActivaPorMQTT && dangerMode) {
                 setDangerMode(false);
             }
         }
 
         function actualizarHumedad(hum) {
-            updateValue('hum-val', Math.round(hum), '%');
+            document.getElementById('hum-val').innerHTML = `${Math.round(hum)}<span class="unit">%</span>`;
             document.getElementById('bar-hum').style.height = hum + '%';
         }
 
         function actualizarRSSI(rssi) {
-            updateValue('rssi-val', rssi, 'dBm');
             const el = document.getElementById('rssi-val');
+            el.innerHTML = `${rssi}<span class="unit">dBm</span>`;
             if (rssi > -60) el.style.color = '#81C784';
             else if (rssi > -75) el.style.color = '#FFD54F';
             else el.style.color = '#F06292';
-        }
-
-        function updateValue(id, value, unit) {
-            const el = document.getElementById(id);
-            const newText = `${value}<span class="unit">${unit}</span>`;
-            if (el.innerHTML !== newText) {
-                el.style.opacity = 0.5;
-                setTimeout(() => {
-                    el.innerHTML = newText;
-                    el.style.opacity = 1;
-                }, 200);
-            }
-        }
-
-        // --- MANEJO DE EMERGENCIA MQTT ---
-        function manejarEmergencia(payload) {
-            try {
-                const data = JSON.parse(payload);
-                const motivo = data.motivo || "Incendio detectado";
-                const temp = data.temperatura;
-                setDangerMode(true, motivo);
-                emergenciaActivaPorMQTT = true;
-                if (Notification.permission === "granted") {
-                    new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo + " | Temp: " + temp + "°C" });
-                } else if (Notification.permission !== "denied") {
-                    Notification.requestPermission();
-                }
-                const statusDiv = document.getElementById('net-status');
-                const originalText = statusDiv.innerText;
-                statusDiv.innerText = "🔴 ¡EMERGENCIA ACTIVA! " + motivo;
-                statusDiv.style.color = "#FF3D00";
-                setTimeout(() => {
-                    if (!dangerMode) {
-                        statusDiv.innerText = originalText;
-                        statusDiv.style.color = "var(--text-sec)";
-                    }
-                }, 8000);
-            } catch (e) { console.error(e); }
         }
 
         // --- MQTT ---
@@ -489,7 +441,6 @@
             username: 'Admin',
             password: 'FluxaIgnis2026',
         };
-        let client;
 
         function conectarMQTT() {
             client = mqtt.connect('wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt', options);
@@ -498,13 +449,14 @@
                 console.log('Conectado a HiveMQ');
                 document.getElementById('esp-status').innerText = 'Online';
                 document.getElementById('esp-status').style.background = 'var(--chart-green)';
-                document.getElementById('desc-val').innerText = 'Recibiendo telemetría';
                 document.getElementById('net-status').innerText = 'Conexión Estable';
                 document.getElementById('net-status').style.color = 'var(--text-sec)';
                 client.subscribe('fxi/datos');
                 client.subscribe('fxi/rssi');
                 client.subscribe('fxi/emergencia');
+                client.subscribe('fxi/simular');   // suscripción para saber estado de simulación
                 emergenciaActivaPorMQTT = false;
+                simulationActive = false;
                 if (!dangerMode) setDangerMode(false);
             });
 
@@ -517,18 +469,36 @@
                             actualizarTemperatura(data.temp);
                             actualizarHumedad(data.hum);
                             addDataPoint(data.temp, data.hum);
-                        } else if (data.temp !== undefined) {
-                            actualizarTemperatura(data.temp);
-                        } else if (data.hum !== undefined) {
-                            actualizarHumedad(data.hum);
-                        }
+                        } else if (data.temp !== undefined) actualizarTemperatura(data.temp);
+                        else if (data.hum !== undefined) actualizarHumedad(data.hum);
                     } 
                     else if (topic === 'fxi/rssi') {
                         const data = JSON.parse(payload);
                         if (data.rssi !== undefined) actualizarRSSI(data.rssi);
                     }
                     else if (topic === 'fxi/emergencia') {
-                        manejarEmergencia(payload);
+                        const data = JSON.parse(payload);
+                        setDangerMode(true, data.motivo || "Incendio detectado");
+                        emergenciaActivaPorMQTT = true;
+                        if (Notification.permission === "granted") {
+                            new Notification("🚨 ALERTA FLUXA IGNIS", { body: data.motivo + " | Temp: " + data.temperatura + "°C" });
+                        }
+                    }
+                    else if (topic === 'fxi/simular') {
+                        // Actualizar estado de simulación
+                        if (payload === 'FUEGO_ON') {
+                            simulationActive = true;
+                            console.log("Simulación activada");
+                        } else if (payload === 'FUEGO_OFF') {
+                            simulationActive = false;
+                            console.log("Simulación desactivada");
+                            // Si la alerta fue por simulación, podemos intentar resetear si la temperatura es segura
+                            const tempActual = parseFloat(document.getElementById('temp-val').innerText);
+                            if (tempActual < 38 && emergenciaActivaPorMQTT) {
+                                emergenciaActivaPorMQTT = false;
+                                setDangerMode(false);
+                            }
+                        }
                     }
                 } catch (e) { console.error(e); }
             });
@@ -588,7 +558,7 @@
             }
         }
 
-        // --- RANGO DE PUNTOS PARA GRÁFICA ---
+        // --- BOTONES DE RANGO PARA GRÁFICA ---
         document.querySelectorAll('.range-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
@@ -597,10 +567,12 @@
                 updateChartDisplay();
             });
         });
-        // Activar botón por defecto (20)
         document.querySelector('.range-btn[data-points="20"]').classList.add('active');
 
-        // --- TEMA Y PARTÍCULAS ---
+        // --- BOTÓN RESETEAR ALERTA ---
+        document.getElementById('resetAlertBtn').addEventListener('click', resetAlerta);
+
+        // --- TEMA Y PARTÍCULAS (igual) ---
         const themeBtn = document.getElementById('theme-toggle');
         themeBtn.onclick = () => {
             isDarkMode = !isDarkMode;
@@ -608,14 +580,12 @@
             themeBtn.innerText = isDarkMode ? '✳' : '☀️';
             initParticles();
             if (ctxChart) {
-                const fontColor = isDarkMode ? '#fff' : '#0B3954';
-                ctxChart.options.plugins.legend.labels.color = fontColor;
+                ctxChart.options.plugins.legend.labels.color = isDarkMode ? '#fff' : '#0B3954';
                 ctxChart.options.scales.y.grid.color = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
                 ctxChart.update();
             }
         };
 
-        // Partículas (fondo)
         const canvas = document.getElementById('weather-canvas');
         const ctxP = canvas.getContext('2d');
         let particles = [];
@@ -630,15 +600,10 @@
                 this.alpha = Math.random();
                 this.speed = Math.random() * 0.02;
             }
-            update() {
-                this.alpha += this.speed;
-                if(this.alpha > 1 || this.alpha < 0) this.speed *= -1;
-            }
+            update() { this.alpha += this.speed; if(this.alpha > 1 || this.alpha < 0) this.speed *= -1; }
             draw() {
-                ctxP.fillStyle = isDarkMode ? `rgba(234, 226, 209,${this.alpha * 0.2})` : `rgba(11, 57, 84,${this.alpha * 0.1})`;
-                ctxP.beginPath();
-                ctxP.arc(this.x, this.y, this.size, 0, Math.PI*2);
-                ctxP.fill();
+                ctxP.fillStyle = isDarkMode ? `rgba(234,226,209,${this.alpha*0.2})` : `rgba(11,57,84,${this.alpha*0.1})`;
+                ctxP.beginPath(); ctxP.arc(this.x, this.y, this.size, 0, Math.PI*2); ctxP.fill();
             }
         }
         function initParticles() { particles = []; for(let i=0;i<60;i++) particles.push(new Particle()); }
