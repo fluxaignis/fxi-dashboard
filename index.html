@@ -199,15 +199,6 @@
             margin-top: 10px;
             color: var(--text-sec);
         }
-        .snooze-indicator {
-            font-size: 11px;
-            margin-top: 5px;
-            color: var(--accent-cyan);
-            background: rgba(0,0,0,0.3);
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 20px;
-        }
     </style>
 </head>
 <body>
@@ -271,7 +262,6 @@
                         <div class="flame-icon" id="flameIcon">🔥</div>
                         <div class="flame-status" id="flameStatus">Estado: Normal</div>
                         <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
-                        <div id="snoozeInfo" class="snooze-indicator" style="display: none;"></div>
                     </div>
 
                     <div class="glass-card">
@@ -296,7 +286,7 @@
 
         <div class="footer">
             <button class="btn-update" onclick="iniciarSistema()">Reconectar Sistema</button>
-            <button class="btn-reset" id="resetAlertBtn">🔇 Resetear Alerta (Silencio 30s)</button>
+            <button class="btn-reset" id="resetAlertBtn">🔄 Resetear Alerta (Forzar)</button>
         </div>
     </div>
 
@@ -306,13 +296,17 @@
         let dangerMode = false;
         let emergenciaActivaPorMQTT = false;
         let simulationActive = false;
-        let manualSilenceUntil = 0;      // timestamp hasta el cual no se activa alerta por temperatura
-        let silenceTimeout = null;
+        let temperaturaAlertaSospechosa = null; // Guarda la temperatura cuando se activó la alerta por aumento sospechoso
         
         let tempHistory = [];
         let currentPoints = 20;
         let ctxChart = null;
         let client = null;
+
+        // Umbrales
+        const DELTA_SOSPECHOSO = 1.5;      // grados de aumento que activaron la alerta
+        const UMBRAL_DESACTIVACION_CRITICA = 38.0;   // para alerta por temperatura ≥40°C
+        const UMBRAL_DESACTIVACION_FUEGO = 35.0;     // para alertas de fuego real (no sospechoso)
 
         // --- INICIALIZAR GRÁFICA ---
         function initChart() {
@@ -366,13 +360,7 @@
         }
 
         // --- MANEJO DE ALERTA VISUAL ---
-        function setDangerMode(active, motivo = "", isMqttEmergency = false) {
-            // Si estamos en modo silencio manual y la activación viene de temperatura (no es MQTT), la ignoramos
-            const now = Date.now();
-            if (!isMqttEmergency && now < manualSilenceUntil) {
-                console.log("Modo silencio activo, ignorando activación por temperatura");
-                return;
-            }
+        function setDangerMode(active, motivo = "") {
             if (active === dangerMode) return;
             dangerMode = active;
             if (dangerMode) {
@@ -387,50 +375,29 @@
                 document.getElementById('flameIcon').classList.add('normal');
                 document.getElementById('flameStatus').innerHTML = 'Estado: Normal';
                 document.getElementById('flameStatus').style.color = 'inherit';
+                // Al desactivar, limpiar también la temperatura de alerta sospechosa
+                temperaturaAlertaSospechosa = null;
             }
         }
 
-        // Resetear alerta con silencio temporal
-        function resetAlerta() {
-            // Desactivar modo peligro visual
-            setDangerMode(false, "");
-            // Limpiar banderas
+        // Forzar desactivación manual
+        function resetAlertaForzado() {
             emergenciaActivaPorMQTT = false;
-            // Activar modo silencio por 30 segundos
-            const now = Date.now();
-            manualSilenceUntil = now + 30000;
-            if (silenceTimeout) clearTimeout(silenceTimeout);
-            silenceTimeout = setTimeout(() => {
-                manualSilenceUntil = 0;
-                document.getElementById('snoozeInfo').style.display = 'none';
-                // Al finalizar el silencio, si la temperatura sigue siendo crítica, reactivar alerta
-                const tempActual = parseFloat(document.getElementById('temp-val').innerText);
-                if (!isNaN(tempActual) && tempActual >= 40.0 && !emergenciaActivaPorMQTT) {
-                    setDangerMode(true, "Temperatura crítica > 40°C (fin silencio)");
-                }
-            }, 30000);
-            // Mostrar indicador de silencio
-            const snoozeDiv = document.getElementById('snoozeInfo');
-            snoozeDiv.style.display = 'block';
-            snoozeDiv.innerText = '🔇 Alerta silenciada por 30s (solo temperatura)';
-            // Opcional: enviar comando para apagar simulación si está activa
+            temperaturaAlertaSospechosa = null;
+            setDangerMode(false, "");
             if (simulationActive && client && client.connected) {
                 client.publish('fxi/simular', 'FUEGO_OFF');
                 simulationActive = false;
             }
-            // También podemos publicar un comando de reset al ESP32 si se desea (opcional)
-            // client.publish('fxi/comandos', 'RESET_ALERT');
-            
-            // Actualizar estado en red
             const statusDiv = document.getElementById('net-status');
-            statusDiv.innerText = "Alerta reiniciada - Silencio 30s";
+            statusDiv.innerText = "Alerta reiniciada manualmente";
             setTimeout(() => {
                 if (!dangerMode) statusDiv.innerText = "Conexión Estable";
                 else statusDiv.innerText = "Modo peligro activo";
-            }, 3000);
+            }, 2000);
         }
 
-        // --- ACTUALIZACIÓN DE UI ---
+        // --- ACTUALIZACIÓN DE UI CON AUTO-DESACTIVACIÓN ESPECÍFICA ---
         function actualizarTemperatura(temp) {
             const tempVal = parseFloat(temp);
             document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
@@ -443,13 +410,37 @@
             else desc = '¡PELIGRO! Calor extremo';
             document.getElementById('desc-val').innerText = desc;
             
-            // Lógica de alerta por temperatura (solo si no hay emergencia MQTT activa y no estamos en silencio)
-            if (tempVal >= 40.0 && !emergenciaActivaPorMQTT) {
-                // Intentar activar modo peligro (respeta silencio)
-                setDangerMode(true, "Temperatura crítica > 40°C", false);
-            } else if (tempVal < 38.0 && !emergenciaActivaPorMQTT && dangerMode) {
-                // Si la temperatura baja lo suficiente, desactivar alerta (si no hay emergencia MQTT)
-                setDangerMode(false, "");
+            // LÓGICA DE DESACTIVACIÓN SEGÚN EL TIPO DE ALERTA
+            if (dangerMode && emergenciaActivaPorMQTT) {
+                // Si hay una emergencia MQTT activa, evaluamos según el motivo
+                // Para "AUMENTO SOSPECHOSO" usamos la temperatura de referencia
+                if (temperaturaAlertaSospechosa !== null) {
+                    // Alertas por aumento sospechoso: desactivar cuando la temperatura baje al menos DELTA_SOSPECHOSO
+                    if (tempVal <= temperaturaAlertaSospechosa - DELTA_SOSPECHOSO) {
+                        setDangerMode(false, "");
+                        emergenciaActivaPorMQTT = false;
+                        temperaturaAlertaSospechosa = null;
+                        console.log("Alerta por aumento sospechoso desactivada: temperatura bajó " + DELTA_SOSPECHOSO + "°C desde el pico");
+                    }
+                } else {
+                    // Otras emergencias MQTT (fuego real, etc.) se desactivan con umbral fijo
+                    if (tempVal < UMBRAL_DESACTIVACION_FUEGO) {
+                        setDangerMode(false, "");
+                        emergenciaActivaPorMQTT = false;
+                        console.log("Alerta MQTT (fuego) desactivada por temperatura < " + UMBRAL_DESACTIVACION_FUEGO);
+                    }
+                }
+            } else if (dangerMode && !emergenciaActivaPorMQTT) {
+                // Alerta por temperatura crítica (≥40°C)
+                if (tempVal < UMBRAL_DESACTIVACION_CRITICA) {
+                    setDangerMode(false, "");
+                    console.log("Alerta por calor desactivada: temp < " + UMBRAL_DESACTIVACION_CRITICA);
+                }
+            }
+            
+            // ACTIVACIÓN POR TEMPERATURA CRÍTICA (solo si no hay emergencia MQTT activa)
+            if (!dangerMode && tempVal >= 40.0 && !emergenciaActivaPorMQTT) {
+                setDangerMode(true, "Temperatura crítica > 40°C");
             }
         }
 
@@ -489,12 +480,7 @@
                 client.subscribe('fxi/simular');
                 emergenciaActivaPorMQTT = false;
                 simulationActive = false;
-                // Al reconectar, si hay silencio activo lo respetamos
-                if (Date.now() < manualSilenceUntil) {
-                    document.getElementById('snoozeInfo').style.display = 'block';
-                } else {
-                    document.getElementById('snoozeInfo').style.display = 'none';
-                }
+                temperaturaAlertaSospechosa = null;
             });
 
             client.on('message', (topic, message) => {
@@ -515,21 +501,36 @@
                     }
                     else if (topic === 'fxi/emergencia') {
                         const data = JSON.parse(payload);
-                        // Las emergencias MQTT SIEMPRE activan la alerta, incluso en modo silencio
-                        // Pero respetamos el silencio? No, porque es una emergencia real. Forzamos activación.
-                        // Sin embargo, si el usuario quiere ignorarlas durante silencio, podemos añadir una opción.
-                        // Por seguridad, siempre activamos.
-                        setDangerMode(true, data.motivo || "Incendio detectado", true);
+                        const motivo = data.motivo || "Incendio detectado";
+                        const tempEmergencia = data.temperatura;
+                        
+                        // Activar alerta
+                        setDangerMode(true, motivo);
                         emergenciaActivaPorMQTT = true;
-                        // Si hay silencio, lo cancelamos porque la emergencia es prioritaria
-                        if (manualSilenceUntil > Date.now()) {
-                            manualSilenceUntil = 0;
-                            if (silenceTimeout) clearTimeout(silenceTimeout);
-                            document.getElementById('snoozeInfo').style.display = 'none';
+                        
+                        // Si es un aumento sospechoso, guardamos la temperatura actual como referencia
+                        if (motivo.includes("AUMENTO SOSPECHOSO") || motivo === "AUMENTO SOSPECHOSO") {
+                            temperaturaAlertaSospechosa = tempEmergencia;
+                            console.log("Alerta por aumento sospechoso registrada a " + temperaturaAlertaSospechosa + "°C");
+                        } else {
+                            // Para otros motivos (fuego, calor crítico, etc.) no usamos la referencia delta
+                            temperaturaAlertaSospechosa = null;
                         }
+                        
+                        // Notificación del navegador
                         if (Notification.permission === "granted") {
-                            new Notification("🚨 ALERTA FLUXA IGNIS", { body: data.motivo + " | Temp: " + data.temperatura + "°C" });
+                            new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo + " | Temp: " + tempEmergencia + "°C" });
                         }
+                        // Mensaje temporal en estado de red
+                        const statusDiv = document.getElementById('net-status');
+                        statusDiv.innerText = "🔴 ¡EMERGENCIA! " + motivo;
+                        statusDiv.style.color = "#FF3D00";
+                        setTimeout(() => {
+                            if (!dangerMode) {
+                                statusDiv.innerText = "Conexión Estable";
+                                statusDiv.style.color = "var(--text-sec)";
+                            }
+                        }, 5000);
                     }
                     else if (topic === 'fxi/simular') {
                         if (payload === 'FUEGO_ON') {
@@ -538,12 +539,8 @@
                         } else if (payload === 'FUEGO_OFF') {
                             simulationActive = false;
                             console.log("Simulación desactivada");
-                            // Si la alerta fue por simulación y ya no hay emergencia MQTT, podemos intentar resetear si temperatura es segura
-                            const tempActual = parseFloat(document.getElementById('temp-val').innerText);
-                            if (tempActual < 38 && emergenciaActivaPorMQTT) {
-                                emergenciaActivaPorMQTT = false;
-                                setDangerMode(false, "");
-                            }
+                            // Si la alerta estaba activa y es por simulación, podemos intentar desactivar si la temperatura es segura
+                            // Pero lo dejamos que lo maneje la lógica de temperatura.
                         }
                     }
                 } catch (e) { console.error(e); }
@@ -616,7 +613,7 @@
         document.querySelector('.range-btn[data-points="20"]').classList.add('active');
 
         // --- BOTÓN RESETEAR ALERTA ---
-        document.getElementById('resetAlertBtn').addEventListener('click', resetAlerta);
+        document.getElementById('resetAlertBtn').addEventListener('click', resetAlertaForzado);
 
         // --- TEMA Y PARTÍCULAS ---
         const themeBtn = document.getElementById('theme-toggle');
