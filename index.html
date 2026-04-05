@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
+        /* (ESTILOS IGUALES, SIN CAMBIOS) */
         :root {
             --bg-start: #0B3954;
             --bg-end: #061A2B;
@@ -296,17 +297,15 @@
         let dangerMode = false;
         let emergenciaActivaPorMQTT = false;
         let simulationActive = false;
-        let temperaturaAlertaSospechosa = null; // Guarda la temperatura cuando se activó la alerta por aumento sospechoso
         
         let tempHistory = [];
         let currentPoints = 20;
         let ctxChart = null;
         let client = null;
 
-        // Umbrales
-        const DELTA_SOSPECHOSO = 1.5;      // grados de aumento que activaron la alerta
+        // Umbrales de desactivación
         const UMBRAL_DESACTIVACION_CRITICA = 38.0;   // para alerta por temperatura ≥40°C
-        const UMBRAL_DESACTIVACION_FUEGO = 35.0;     // para alertas de fuego real (no sospechoso)
+        const UMBRAL_DESACTIVACION_FUEGO = 35.0;     // para alertas MQTT de fuego real
 
         // --- INICIALIZAR GRÁFICA ---
         function initChart() {
@@ -375,15 +374,12 @@
                 document.getElementById('flameIcon').classList.add('normal');
                 document.getElementById('flameStatus').innerHTML = 'Estado: Normal';
                 document.getElementById('flameStatus').style.color = 'inherit';
-                // Al desactivar, limpiar también la temperatura de alerta sospechosa
-                temperaturaAlertaSospechosa = null;
             }
         }
 
         // Forzar desactivación manual
         function resetAlertaForzado() {
             emergenciaActivaPorMQTT = false;
-            temperaturaAlertaSospechosa = null;
             setDangerMode(false, "");
             if (simulationActive && client && client.connected) {
                 client.publish('fxi/simular', 'FUEGO_OFF');
@@ -397,7 +393,7 @@
             }, 2000);
         }
 
-        // --- ACTUALIZACIÓN DE UI CON AUTO-DESACTIVACIÓN ESPECÍFICA ---
+        // --- ACTUALIZACIÓN DE UI CON AUTO-DESACTIVACIÓN SIMPLIFICADA ---
         function actualizarTemperatura(temp) {
             const tempVal = parseFloat(temp);
             document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
@@ -411,30 +407,20 @@
             document.getElementById('desc-val').innerText = desc;
             
             // LÓGICA DE DESACTIVACIÓN SEGÚN EL TIPO DE ALERTA
-            if (dangerMode && emergenciaActivaPorMQTT) {
-                // Si hay una emergencia MQTT activa, evaluamos según el motivo
-                // Para "AUMENTO SOSPECHOSO" usamos la temperatura de referencia
-                if (temperaturaAlertaSospechosa !== null) {
-                    // Alertas por aumento sospechoso: desactivar cuando la temperatura baje al menos DELTA_SOSPECHOSO
-                    if (tempVal <= temperaturaAlertaSospechosa - DELTA_SOSPECHOSO) {
-                        setDangerMode(false, "");
-                        emergenciaActivaPorMQTT = false;
-                        temperaturaAlertaSospechosa = null;
-                        console.log("Alerta por aumento sospechoso desactivada: temperatura bajó " + DELTA_SOSPECHOSO + "°C desde el pico");
-                    }
-                } else {
-                    // Otras emergencias MQTT (fuego real, etc.) se desactivan con umbral fijo
+            if (dangerMode) {
+                if (emergenciaActivaPorMQTT) {
+                    // Alerta por fuego real (MQTT)
                     if (tempVal < UMBRAL_DESACTIVACION_FUEGO) {
                         setDangerMode(false, "");
                         emergenciaActivaPorMQTT = false;
-                        console.log("Alerta MQTT (fuego) desactivada por temperatura < " + UMBRAL_DESACTIVACION_FUEGO);
+                        console.log("Alerta MQTT desactivada: temperatura < " + UMBRAL_DESACTIVACION_FUEGO);
                     }
-                }
-            } else if (dangerMode && !emergenciaActivaPorMQTT) {
-                // Alerta por temperatura crítica (≥40°C)
-                if (tempVal < UMBRAL_DESACTIVACION_CRITICA) {
-                    setDangerMode(false, "");
-                    console.log("Alerta por calor desactivada: temp < " + UMBRAL_DESACTIVACION_CRITICA);
+                } else {
+                    // Alerta por temperatura crítica (≥40°C)
+                    if (tempVal < UMBRAL_DESACTIVACION_CRITICA) {
+                        setDangerMode(false, "");
+                        console.log("Alerta por calor desactivada: temp < " + UMBRAL_DESACTIVACION_CRITICA);
+                    }
                 }
             }
             
@@ -480,7 +466,6 @@
                 client.subscribe('fxi/simular');
                 emergenciaActivaPorMQTT = false;
                 simulationActive = false;
-                temperaturaAlertaSospechosa = null;
             });
 
             client.on('message', (topic, message) => {
@@ -504,18 +489,15 @@
                         const motivo = data.motivo || "Incendio detectado";
                         const tempEmergencia = data.temperatura;
                         
-                        // Activar alerta
+                        // IGNORAR ALERTAS POR AUMENTO SOSPECHOSO
+                        if (motivo.includes("AUMENTO") || motivo.includes("sospechoso")) {
+                            console.log("Alerta ignorada (aumento sospechoso): " + motivo);
+                            return;
+                        }
+                        
+                        // Activar alerta para fuego real
                         setDangerMode(true, motivo);
                         emergenciaActivaPorMQTT = true;
-                        
-                        // Si es un aumento sospechoso, guardamos la temperatura actual como referencia
-                        if (motivo.includes("AUMENTO SOSPECHOSO") || motivo === "AUMENTO SOSPECHOSO") {
-                            temperaturaAlertaSospechosa = tempEmergencia;
-                            console.log("Alerta por aumento sospechoso registrada a " + temperaturaAlertaSospechosa + "°C");
-                        } else {
-                            // Para otros motivos (fuego, calor crítico, etc.) no usamos la referencia delta
-                            temperaturaAlertaSospechosa = null;
-                        }
                         
                         // Notificación del navegador
                         if (Notification.permission === "granted") {
@@ -539,8 +521,6 @@
                         } else if (payload === 'FUEGO_OFF') {
                             simulationActive = false;
                             console.log("Simulación desactivada");
-                            // Si la alerta estaba activa y es por simulación, podemos intentar desactivar si la temperatura es segura
-                            // Pero lo dejamos que lo maneje la lógica de temperatura.
                         }
                     }
                 } catch (e) { console.error(e); }
