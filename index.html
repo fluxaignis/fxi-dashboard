@@ -489,13 +489,14 @@
                         const motivo = data.motivo || "Incendio detectado";
                         const tempEmergencia = data.temperatura;
                         
-                        // IGNORAR ALERTAS POR AUMENTO SOSPECHOSO
-                        if (motivo.includes("AUMENTO") || motivo.includes("sospechoso")) {
-                            console.log("Alerta ignorada (aumento sospechoso): " + motivo);
+                        // IGNORAR FALSAS ALERTAS: aumento sospechoso, KY-026 (sin sensor) y fuego simulado sin querer
+                        if (motivo.includes("AUMENTO") || motivo.includes("sospechoso") ||
+                            motivo.includes("KY-026") || motivo.includes("FUEGO DETECTADO")) {
+                            console.log("Alerta ignorada (falsa alarma): " + motivo);
                             return;
                         }
                         
-                        // Activar alerta para fuego real
+                        // Activar alerta solo para fuego real o comandos válidos
                         setDangerMode(true, motivo);
                         emergenciaActivaPorMQTT = true;
                         
