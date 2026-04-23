@@ -2,8 +2,8 @@ name: Build and Release ESP32 Firmware
 
 on:
   push:
-    branches: [ "main" ]      # Se activa cuando subes cambios a la rama "main"
-  workflow_dispatch:          # También permite ejecutarlo manualmente desde la web
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -28,17 +28,17 @@ jobs:
         arduino-cli lib install "DHT sensor library"
         arduino-cli lib install "PubSubClient"
         arduino-cli lib install "ESP32Servo"
-        # Si usas otras librerías, agrégalas aquí
+        arduino-cli lib install "LittleFS"
+        arduino-cli lib install "ArduinoOTA"
+        # "DNSServer", "WiFi", "WebServer", "ESPmDNS", "time" son parte del core ESP32, no necesitan instalación aparte.
 
     - name: Compile firmware
       run: |
         mkdir -p output
         arduino-cli compile --fqbn esp32:esp32:esp32:FlashFreq=80,PartitionScheme=default,UploadSpeed=921600 firmware/fxi-esp32.ino --output-dir ./output
 
-    - name: Rename binary (GitHub OTA expects a specific name)
+    - name: Rename binary for OTA
       run: |
-        # El binario generado se llamará algo como fxi-esp32.ino.bin
-        # Lo renombramos a fxi-esp32.bin para que coincida con el código.
         mv output/fxi-esp32.ino.bin output/fxi-esp32.bin
 
     - name: Create GitHub Release
