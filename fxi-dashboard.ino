@@ -2,7 +2,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
-#include <WebServer.h>
+#include <WebServer.h>        // Este lo reemplazamos por AsyncWebServer
 #include <DNSServer.h>
 #include <ESPmDNS.h>
 #include <ESP32Servo.h>
@@ -12,14 +12,18 @@
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 
+// --- Nuevas librerías para WebSerial ---
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <WebSerial.h>
+
 // --- CONFIGURACIÓN DE GITHUB OTA ---
-// La palabra mágica "AUTO_VERSION" será reemplazada por el robot durante la compilación
 String FIRMWARE_VERSION = "AUTO_VERSION";
 const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/version.txt";
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/firmware.bin";
 
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 15000; // 5 minutos (para pruebas; cámbialo a 3600000 para 1 hora)
+const unsigned long INTERVALO_OTA = 15000;
 
 // --- MAPEO DE PINES ---
 #define DHTPIN 27
@@ -38,7 +42,9 @@ Servo servoHorizontal;
 Servo servoVertical;
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
-WebServer server(80);
+
+// --- Servidor Async para WebSerial y el portal cautivo ---
+AsyncWebServer asyncServer(80);
 DNSServer dnsServer;
 
 // --- ESTADOS Y TIEMPOS DE LA RUTINA ---
@@ -73,7 +79,7 @@ const int daylightOffset_sec = 0;
 
 // --- Configuración del punto de acceso (hotspot) ---
 const char* ap_ssid = "FLUXA IGNIS";
-const char* ap_password = "";          // Red abierta
+const char* ap_password = "";
 IPAddress apIP(192, 168, 1, 1);
 IPAddress apGateway(192, 168, 1, 1);
 IPAddress apSubnet(255, 255, 255, 0);
@@ -131,39 +137,37 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-// --- MANEJADORES WEB ---
-void handleRoot() {
+// --- MANEJADORES WEB (adaptados a AsyncWebServer) ---
+void handleRoot(AsyncWebServerRequest *request) {
   File file = LittleFS.open("/index.html", "r");
   if (!file) {
-    server.send(500, "text/plain", "Error al cargar la página");
+    request->send(500, "text/plain", "Error al cargar la página");
     return;
   }
-  server.streamFile(file, "text/html");
+  request->send(file, "text/html");
   file.close();
 }
 
-void handleEstado() {
+void handleEstado(AsyncWebServerRequest *request) {
   String json = "{";
   json += "\"temp\":" + String(tempGuardada) + ",";
   json += "\"hum\":" + String(humGuardada) + ",";
   json += "\"rssi\":" + String(rssiGuardado);
   json += "}";
-  server.send(200, "application/json", json);
+  request->send(200, "application/json", json);
 }
 
-void handleToggle() {
+void handleToggle(AsyncWebServerRequest *request) {
   if (estadoActual == REPOSO) iniciarRutina("Comando Web");
   else detenerRutina();
-  server.send(200, "text/plain", (estadoActual != REPOSO) ? "ON" : "OFF");
+  request->send(200, "text/plain", (estadoActual != REPOSO) ? "ON" : "OFF");
 }
 
-void handleNotFound() {
-  // Redirige cualquier ruta no encontrada a la raíz (portal cautivo)
-  server.send(200, "text/html", "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0;url=http://192.168.1.1/'></head><body></body></html>");
+void handleNotFound(AsyncWebServerRequest *request) {
+  request->send(200, "text/html", "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0;url=http://192.168.1.1/'></head><body></body></html>");
 }
 
 void chequearActualizacionGitHub() {
-  // Solo intentamos actualizar si hay conexión a la red externa
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Sin conexión WiFi externa. Se omite chequeo OTA de GitHub.");
     return;
@@ -172,25 +176,19 @@ void chequearActualizacionGitHub() {
   Serial.println("Chequeando actualizaciones en GitHub...");
 
   HTTPClient http;
-  // Usamos el espClient que ya tienes configurado como Inseguro (setInsecure) en tu setup
   http.begin(espClient, urlVersion); 
   int httpCode = http.GET();
 
   if (httpCode == HTTP_CODE_OK) {
     String versionGitHub = http.getString();
-    versionGitHub.trim(); // Limpiamos espacios o saltos de línea
+    versionGitHub.trim();
 
     Serial.println("Versión actual en ESP32: " + FIRMWARE_VERSION);
     Serial.println("Versión detectada en GitHub: " + versionGitHub);
 
-    // Si las versiones no coinciden, iniciamos la descarga
     if (versionGitHub != FIRMWARE_VERSION && versionGitHub.length() > 0) {
       Serial.println("¡Nueva versión detectada! Iniciando descarga e instalación OTA...");
-
-      // GitHub usa redirecciones en sus links RAW, hay que habilitarlas
       httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-      
-      // Iniciamos el flasheo
       t_httpUpdate_return ret = httpUpdate.update(espClient, urlFirmware);
 
       switch (ret) {
@@ -228,19 +226,19 @@ void setup() {
   servoVertical.setPeriodHertz(50); servoVertical.attach(PIN_SERVO_V, 500, 2400);
   servoHorizontal.write(SERVO_H_NEUTRAL); servoVertical.write(20);
 
-  // Inicializar LittleFS
+  // LittleFS
   if (!LittleFS.begin()) {
     Serial.println("Error al montar LittleFS");
     return;
   }
 
-Serial.println("Listando archivos en LittleFS:");
-File root = LittleFS.open("/");
-File file = root.openNextFile();
-while (file) {
+  Serial.println("Listando archivos en LittleFS:");
+  File root = LittleFS.open("/");
+  File file = root.openNextFile();
+  while (file) {
     Serial.println(file.name());
     file = root.openNextFile();
-}
+  }
 
   // ========== 1. Configurar punto de acceso (AP) ==========
   WiFi.mode(WIFI_AP_STA);
@@ -284,32 +282,44 @@ while (file) {
 
   // ========== 5. Configurar OTA ==========
   ArduinoOTA.setHostname("fluxaignis_ota");
-  ArduinoOTA.setPassword("12345678");   // Opcional
+  ArduinoOTA.setPassword("12345678");
   ArduinoOTA.begin();
   Serial.println("OTA iniciado. Usa fluxaignis_ota.local o la IP para actualizar.");
 
-  // ========== 6. Configurar servidor web ==========
-  server.on("/", handleRoot);
-  server.on("/estado", handleEstado);
-  server.on("/toggleServo", handleToggle);
-  server.on("/generate_204", []() { server.send(204); });
-  server.onNotFound(handleNotFound);
-  server.begin();
+  // ========== 6. Configurar servidor web ASYNC y WebSerial ==========
+  asyncServer.on("/", HTTP_GET, handleRoot);
+  asyncServer.on("/estado", HTTP_GET, handleEstado);
+  asyncServer.on("/toggleServo", HTTP_GET, handleToggle);
+  asyncServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(204);
+  });
+  asyncServer.onNotFound(handleNotFound);
+
+  // Inicializar WebSerial (se añade automáticamente la ruta /webserial)
+  WebSerial.begin(&asyncServer);
+  // Reenviar todos los mensajes Serial a WebSerial
+  WebSerial.msgCallback([](uint8_t *data, size_t len) {
+    Serial.write(data, len);
+  });
+
+  asyncServer.begin();
 
   Serial.println("Servidor web listo. Portal cautivo activo.");
   Serial.println("Accede a:");
   Serial.println(" - http://192.168.1.1");
   Serial.println(" - http://fluxaignis.local");
+  Serial.println(" - Para WebSerial: http://[IP]/webserial");
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print(" - http://");
     Serial.println(WiFi.localIP());
   }
-  Serial.println("Sistema híbrido (AP+STA) con MQTT, LittleFS y OTA.");
+  Serial.println("Sistema híbrido (AP+STA) con MQTT, LittleFS, OTA y WebSerial.");
 }
 
 void loop() {
   dnsServer.processNextRequest();
-  server.handleClient();
+  // Como AsyncWebServer no necesita server.handleClient() en el loop,
+  // solo procesamos DNS, OTA y MQTT.
   ArduinoOTA.handle();
 
   // Mantener MQTT solo si hay WiFi externo
@@ -336,7 +346,7 @@ void loop() {
     ultimoTiempoDHT = ahora;
   }
 
-  // --- LECTURA DE RSSI (actualizar siempre, incluso en modo AP, aunque no sea muy útil) ---
+  // --- LECTURA DE RSSI ---
   rssiGuardado = WiFi.RSSI();
 
   // ========== 1. DETECCIÓN DE FUEGO ==========
@@ -428,8 +438,7 @@ void loop() {
     }
   }
 
-// ========== CHEQUEO AUTOMÁTICO DE OTA DESDE GITHUB ==========
-  // (Ya usamos la variable 'ahora' que definiste al principio del loop)
+  // ========== CHEQUEO OTA DESDE GITHUB ==========
   if (ahora - ultimoChequeoOTA >= INTERVALO_OTA) {
     ultimoChequeoOTA = ahora;
     chequearActualizacionGitHub();
