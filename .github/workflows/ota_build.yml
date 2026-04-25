@@ -29,14 +29,24 @@ jobs:
           arduino-cli lib install "PubSubClient"
           arduino-cli lib install "ESP32Servo"
 
-      - name: 5. Compilar Firmware
+      - name: 5. Inyectar Versión y Compilar
         run: |
+          # Generamos la versión basada en la fecha y hora actual
+          V_AUTO=$(date +'%Y%m%d%H%M')
+          echo "Preparando firmware versión: $V_AUTO"
+          
+          # Guardamos esa versión en version.txt
+          echo $V_AUTO > version.txt
+          
+          # Inyectamos el número directamente en el código .ino
+          sed -i "s/__VERSION__/$V_AUTO/g" fxi-dashboard.ino
+          
+          # Compilamos el código ya modificado
           arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir ./build fxi-dashboard.ino
 
-      - name: 6. Preparar archivos y Actualizar versión
+      - name: 6. Preparar binario
         run: |
           cp ./build/fxi-dashboard.ino.bin ./firmware.bin
-          date +'%Y%m%d%H%M' > version.txt
 
       - name: 7. Subir cambios al repositorio
         run: |
