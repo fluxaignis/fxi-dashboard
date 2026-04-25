@@ -19,7 +19,7 @@ const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashb
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/firmware.bin";
 
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 300000; // 5 minutos (para pruebas; cámbialo a 3600000 para 1 hora)
+const unsigned long INTERVALO_OTA = 15000; // 5 minutos (para pruebas; cámbialo a 3600000 para 1 hora)
 
 // --- MAPEO DE PINES ---
 #define DHTPIN 27
@@ -72,7 +72,7 @@ const long gmtOffset_sec = -14400;
 const int daylightOffset_sec = 0;
 
 // --- Configuración del punto de acceso (hotspot) ---
-const char* ap_ssid = "FXI-V2";
+const char* ap_ssid = "FXI-V3";
 const char* ap_password = "";          // Red abierta
 IPAddress apIP(192, 168, 1, 1);
 IPAddress apGateway(192, 168, 1, 1);
