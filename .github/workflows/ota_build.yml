@@ -2,76 +2,49 @@ name: Compilar y publicar firmware ESP32
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Clonar repositorio
+      - name: 1. Descargar código del Repo
         uses: actions/checkout@v4
 
-      - name: Calcular número de versión
-        id: version
-        run: |
-          # Usamos el número de ejecución como parte de la versión
-          # Formato: 1.0.<run_number>
-          VERSION="1.0.${{ github.run_number }}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: 2. Instalar Arduino CLI
+        uses: arduino/setup-arduino-cli@v2 # Usamos la v2 que es más estable
 
-      - name: Inyectar versión en el código
-        run: |
-          # Reemplaza el marcador __VERSION__ por el número de versión real
-          sed -i "s/__VERSION__/${{ steps.version.outputs.version }}/g" ESP32SERVER.ino
-          # Verifica el cambio (opcional)
-          head -n 5 ESP32SERVER.ino
-
-      - name: Instalar Arduino CLI
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-          echo "$HOME/bin" >> $GITHUB_PATH
-
-      - name: Instalar core ESP32
+      - name: 3. Configurar plataforma ESP32
         run: |
           arduino-cli core update-index
-          arduino-cli core install esp32:esp32@2.0.14
+          # Agregamos la URL oficial de ESP32 para que el robot sepa dónde buscar
+          arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
 
-      - name: Instalar librerías necesarias
+      - name: 4. Instalar Librerías
         run: |
           arduino-cli lib install "DHT sensor library"
+          arduino-cli lib install "Adafruit Unified Sensor"
           arduino-cli lib install "PubSubClient"
           arduino-cli lib install "ESP32Servo"
-          arduino-cli lib install "ArduinoJson"
-          arduino-cli lib install "LittleFS"
 
-      - name: Compilar firmware
+      - name: 5. Compilar Firmware
         run: |
-          mkdir -p output
-          arduino-cli compile --fqbn esp32:esp32:esp32:FlashFreq=80,PartitionScheme=min_spiffs,UploadSpeed=921600 \
-            ESP32SERVER.ino --output-dir ./output
+          # IMPORTANTE: Asegúrate que el archivo se llame exactamente ESP32SERVER.ino
+          arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir ./build ./ESP32SERVER.ino
 
-      - name: Renombrar binario
-        run: mv output/ESP32SERVER.ino.bin output/firmware.bin
+      - name: 6. Preparar archivos y Actualizar versión
+        run: |
+          cp ./build/*.bin ./firmware.bin
+          # Genera una versión basada en la fecha/hora (ej: 202405201530)
+          date +'%Y%m%d%H%M' > version.txt
 
-      - name: Crear archivo version.txt
-        run: echo "${{ steps.version.outputs.version }}" > output/version.txt
-
-      - name: Publicar artefactos (firmware + version)
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-artifacts
-          path: output/
-
-      - name: Subir a rama gh-pages (para descarga pública)
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: ./output
-          keep_files: false
-          commit_message: "Actualizar firmware ${{ steps.version.outputs.version }}"
-          user_name: "github-actions[bot]"
-          user_email: "github-actions[bot]@users.noreply.github.com"
+      - name: 7. Subir cambios al repositorio
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add firmware.bin version.txt
+          git commit -m "🚀 Auto-update firmware [skip ci]"
+          git push
