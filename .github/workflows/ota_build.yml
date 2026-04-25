@@ -1,0 +1,62 @@
+name: Compilar y publicar firmware ESP32
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Arduino CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Instalar core ESP32
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@2.0.14
+
+      - name: Instalar librerías necesarias
+        run: |
+          arduino-cli lib install "DHT sensor library"
+          arduino-cli lib install "PubSubClient"
+          arduino-cli lib install "ESP32Servo"
+          arduino-cli lib install "ArduinoJson"
+          arduino-cli lib install "LittleFS"
+
+      - name: Compilar firmware
+        run: |
+          mkdir -p output
+          arduino-cli compile --fqbn esp32:esp32:esp32:FlashFreq=80,PartitionScheme=min_spiffs,UploadSpeed=921600 \
+            ESP32SERVER.ino --output-dir ./output
+
+      - name: Renombrar binario
+        run: mv output/ESP32SERVER.ino.bin output/firmware.bin
+
+      - name: Crear archivo version.txt
+        run: echo "1.0.${{ github.run_number }}" > output/version.txt
+
+      - name: Publicar artefactos (firmware + version)
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-artifacts
+          path: output/
+
+      - name: Subir a rama gh-pages (para descarga pública)
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./output
+          keep_files: false
+          commit_message: "Actualizar firmware v1.0.${{ github.run_number }}"
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
