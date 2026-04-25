@@ -30,9 +30,8 @@ jobs:
           arduino-cli lib install "PubSubClient"
           arduino-cli lib install "ESP32Servo"
 
-- name: 5. Compilar Firmware
+      - name: 5. Compilar Firmware
         run: |
-          # Ahora apuntamos al archivo con el nombre del repositorio
           arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir ./build ./fxi-dashboard.ino
           
       - name: 6. Preparar archivos y Actualizar versión
