@@ -35,7 +35,7 @@ jobs:
 
       - name: 6. Preparar archivos y Actualizar versión
         run: |
-          cp ./build/*.bin ./firmware.bin
+          cp ./build/fxi-dashboard.ino.bin ./firmware.bin
           date +'%Y%m%d%H%M' > version.txt
 
       - name: 7. Subir cambios al repositorio
