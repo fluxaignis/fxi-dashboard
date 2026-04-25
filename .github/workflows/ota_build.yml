@@ -35,6 +35,7 @@ jobs:
       - name: Compilar firmware
         run: |
           mkdir -p output
+          # Importante: esquema de partición "min_spiffs" (1.9MB APP con OTA)
           arduino-cli compile --fqbn esp32:esp32:esp32:FlashFreq=80,PartitionScheme=min_spiffs,UploadSpeed=921600 \
             ESP32SERVER.ino --output-dir ./output
 
