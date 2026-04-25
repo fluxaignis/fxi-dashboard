@@ -72,7 +72,7 @@ const long gmtOffset_sec = -14400;
 const int daylightOffset_sec = 0;
 
 // --- Configuración del punto de acceso (hotspot) ---
-const char* ap_ssid = "FXI-V2";
+const char* ap_ssid = "FLUXA IGNIS";
 const char* ap_password = "";          // Red abierta
 IPAddress apIP(192, 168, 1, 1);
 IPAddress apGateway(192, 168, 1, 1);
