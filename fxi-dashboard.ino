@@ -396,11 +396,12 @@ void loop() {
     setColor(255, 0, 0);
     if ((ahora / 300) % 2 == 0) tone(PIN_BUZZER, 2000);
     else noTone(PIN_BUZZER);
-  } else {
+    } else {
     noTone(PIN_BUZZER);
     int r = (tempGuardada >= 35) ? 255 : (tempGuardada >= 30 ? 255 : 0);
     int g = (tempGuardada >= 35) ? 0 : (tempGuardada >= 30 ? 100 : 255);
-    setColor(r, g, 0);
+    int b = (tempGuardada < 30) ? 255 : 0;   // <-- añadido azul para cian
+    setColor(r, g, b);
   }
 
   // ========== 4. MÁQUINA DE ESTADOS DEL SERVO ==========
