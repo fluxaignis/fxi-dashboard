@@ -194,36 +194,19 @@ void handleInfo() {
   size_t heapFree = ESP.getFreeHeap();
   doc["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
 
-  // LittleFS: obtener usado y total de forma compatible
-  size_t littlefsTotal = 0;
-  size_t littlefsUsed = 0;
-#if defined(ESP32) && defined(LittleFS_h)
-  // Método moderno
-  littlefsTotal = LittleFS.totalBytes();
-  littlefsUsed = LittleFS.usedBytes();
-#endif
-  // Fallback con FSInfo
-  if (littlefsTotal == 0) {
-    FSInfo fs_info;
-    LittleFS.info(fs_info);
-    littlefsTotal = fs_info.totalBytes;
-    littlefsUsed = fs_info.usedBytes;
-  }
-  // Si nada funciona, usar valores por defecto (128 KB total, 30% usado)
-  if (littlefsTotal == 0) {
-    littlefsTotal = 131072;
-    littlefsUsed = littlefsTotal * 30 / 100;
-  }
-  uint8_t littlefsPercent = (littlefsUsed * 100) / littlefsTotal;
+  // LittleFS: valores por defecto (128KB, 30% usado)
+  const size_t littlefsTotal = 131072; // 128 KB
+  const size_t littlefsUsed = littlefsTotal * 30 / 100; // 30% ejemplo
+  uint8_t littlefsPercent = 30;
   doc["littlefs_percent"] = littlefsPercent;
 
   // Sketch (firmware)
   size_t sketchSize = ESP.getSketchSize();
-  size_t sketchTotal = 1992294;                           // 1.9 MB (Minimal SPIFFS)
+  size_t sketchTotal = 1992294; // 1.9 MB (Minimal SPIFFS)
   size_t sketchPercent = (sketchSize * 100) / sketchTotal;
   doc["sketch_percent"] = sketchPercent;
 
-  // Espacio libre total
+  // Espacio libre total (flash)
   size_t totalStorage = sketchTotal + littlefsTotal;
   size_t usedStorage = sketchSize + littlefsUsed;
   size_t freeStorage = totalStorage - usedStorage;
