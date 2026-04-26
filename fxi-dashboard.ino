@@ -19,7 +19,7 @@ const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dash
 const char* urlHTML = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/esp32/index.html";
 
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 60000; // 1 minuto para pruebas
+const unsigned long INTERVALO_OTA = 60001; // 1 minuto para pruebas
 
 // --- MAPEO DE PINES ---
 #define DHTPIN 27
