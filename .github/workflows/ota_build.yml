@@ -5,13 +5,16 @@ on:
     branches:
       - main
     paths:
-      - 'fxi-dashboard.ino'      # Solo si cambia el código
+      - 'fxi-dashboard.ino'
       - '*.h'
-  workflow_dispatch:              # Permite ejecución manual
+      - 'data/index.html'        # también reacciona a cambios en el HTML
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Clonar repositorio
         uses: actions/checkout@v4
@@ -40,9 +43,7 @@ jobs:
 
       - name: Inyectar versión y compilar
         run: |
-          # Reemplazar el marcador AUTO_VERSION por el número de versión
           sed -i "s/AUTO_VERSION/${{ steps.vars.outputs.VERSION }}/g" fxi-dashboard.ino
-          # Compilar
           arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir ./build fxi-dashboard.ino
 
       - name: Preparar binario y version.txt
@@ -50,10 +51,18 @@ jobs:
           cp ./build/fxi-dashboard.ino.bin ./firmware.bin
           echo "${{ steps.vars.outputs.VERSION }}" > version.txt
 
-      - name: Subir cambios al repositorio (solo si hay cambios)
+      - name: Copiar HTML optimizado a subcarpeta para gh-pages
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add firmware.bin version.txt
-          git commit -m "🚀 Auto-update firmware ${{ steps.vars.outputs.VERSION }} [skip ci]" || echo "No hay cambios"
-          git push
+          mkdir -p esp32
+          cp data/index.html esp32/
+
+      - name: Subir firmware, versión y HTML a rama gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./
+          keep_files: false
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: "Actualizar firmware ${{ steps.vars.outputs.VERSION }}"
