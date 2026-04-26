@@ -132,14 +132,7 @@
             width: 100%;
             transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .footer {
-            margin-top: 40px;
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        .btn-update, .btn-reset {
+        .btn-update, .btn-reset, .action-square {
             background: var(--accent-blue);
             color: #0B3954;
             border: none;
@@ -153,7 +146,7 @@
             background: var(--chart-pink);
             color: white;
         }
-        .btn-update:hover, .btn-reset:hover { transform: translateY(-2px); }
+        .btn-update:hover, .btn-reset:hover, .action-square:hover { transform: translateY(-2px); }
         #esp-status {
             font-size: 10px;
             padding: 3px 8px;
@@ -601,6 +594,16 @@
                         <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
                     </div>
 
+                    <!-- Nuevos botones cuadrados (Reconectar Sistema y Resetear Alerta) -->
+                    <div class="glass-card action-square-card" style="grid-column: span 1; text-align: center; cursor: pointer;" onclick="location.reload()">
+                        <span class="action-icon">🔄</span>
+                        <div class="action-label" style="margin-top: 8px; font-weight: 500;">Reconectar Sistema</div>
+                    </div>
+                    <div class="glass-card action-square-card" style="grid-column: span 1; text-align: center; cursor: pointer;" id="resetAlertBtnSquare">
+                        <span class="action-icon">🔄</span>
+                        <div class="action-label" style="margin-top: 8px; font-weight: 500;">Resetear Alerta</div>
+                    </div>
+
                     <!-- Panel Administración -->
                     <div class="glass-card admin-card" id="adminCard" style="grid-column: span 2;">
                         <div class="admin-reduced">
@@ -676,10 +679,7 @@
                 </div>
             </div>
         </div>
-        <div class="footer">
-            <button class="btn-update" onclick="location.reload()">Reconectar Sistema</button>
-            <button class="btn-reset" id="resetAlertBtn">🔄 Resetear Alerta (Forzar)</button>
-        </div>
+        <!-- Footer eliminado, los botones están dentro de la columna derecha -->
     </div>
 
     <!-- Modales y Toast -->
@@ -1147,7 +1147,8 @@
             });
         });
         document.querySelector('.range-btn[data-points="20"]').classList.add('active');
-        document.getElementById('resetAlertBtn').addEventListener('click', resetAlertaForzado);
+        // Botón "Resetear Alerta" cuadrado
+        document.getElementById('resetAlertBtnSquare').addEventListener('click', resetAlertaForzado);
         document.getElementById('btn-servo').addEventListener('click', toggleServo);
 
         const themeBtn = document.getElementById('theme-toggle');
