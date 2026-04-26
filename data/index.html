@@ -81,8 +81,8 @@
         }
         .glass-card:hover { transform: translateY(-5px); }
         .card-title { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-sec); margin-bottom: 10px; }
-        .val-big { font-size: clamp(40px, 8vw, 64px); font-weight: 200; transition: all 0.5s ease; }
-        .val-med { font-size: 32px; font-weight: 500; transition: all 0.5s ease; }
+        .val-big { font-size: clamp(40px, 8vw, 64px); font-weight: 200; }
+        .val-med { font-size: 32px; font-weight: 500; }
         .unit { font-size: 16px; opacity: 0.7; }
         .chart-container { height: 120px; display: flex; align-items: flex-end; justify-content: space-around; margin-top: 15px; }
         .bar-group { width: 35px; text-align: center; }
@@ -92,7 +92,6 @@
         .btn-update, .btn-reset {
             background: var(--accent-blue); color: #0B3954; border: none;
             padding: 12px 30px; border-radius: 50px; font-weight: 700; cursor: pointer;
-            box-shadow: 0 4px 15px rgba(234, 226, 209, 0.2);
             transition: all 0.3s ease;
         }
         .btn-reset {
@@ -117,18 +116,14 @@
             color: var(--accent-cyan);
             padding: 10px 20px;
             border-radius: 15px;
-            font-weight: 800;
-            font-size: 12px;
             cursor: pointer;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             width: 100%;
-            letter-spacing: 1px;
+            transition: all 0.3s;
         }
         .btn-servo.active {
             background: var(--accent-cyan);
             color: #061A2B;
             box-shadow: 0 0 20px rgba(122, 240, 212, 0.4);
-            transform: scale(1.05);
         }
         .btn-servo:hover {
             background: rgba(122, 240, 212, 0.1);
@@ -153,9 +148,9 @@
             animation: pulse 1s infinite;
         }
         @keyframes pulse {
-            0% { transform: scale(1); text-shadow: 0 0 5px #FF3D00; }
-            50% { transform: scale(1.1); text-shadow: 0 0 25px #FF3D00; }
-            100% { transform: scale(1); text-shadow: 0 0 5px #FF3D00; }
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
         }
         .flame-status {
             font-size: 18px;
@@ -195,10 +190,6 @@
             background: var(--accent-cyan);
             color: #0B3954;
         }
-        .range-btn:hover {
-            background: var(--accent-cyan);
-            color: #0B3954;
-        }
         .avg-text {
             font-size: 12px;
             text-align: center;
@@ -214,6 +205,110 @@
         }
         .legend-temp { color: #F06292; }
         .legend-hum { color: #4FC3F7; }
+        /* Panel de administración */
+        .admin-card {
+            grid-column: span 2;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            overflow: hidden;
+        }
+        .admin-card .admin-reduced {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .admin-card .admin-expanded {
+            display: none;
+        }
+        .admin-card.expanded .admin-reduced {
+            display: none;
+        }
+        .admin-card.expanded .admin-expanded {
+            display: block;
+        }
+        .admin-card .admin-title {
+            font-size: 1.2rem;
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
+        .admin-card small {
+            opacity: 0.6;
+            font-size: 0.7rem;
+        }
+        .admin-card .lock-icon {
+            font-size: 1rem;
+        }
+        .admin-log {
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+            padding: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+        .admin-log p {
+            margin: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 4px;
+        }
+        .admin-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 15px 0;
+        }
+        .stat {
+            background: rgba(0,0,0,0.2);
+            border-radius: 14px;
+            padding: 8px 12px;
+            text-align: center;
+        }
+        .stat span {
+            font-size: 20px;
+            font-weight: bold;
+            display: block;
+        }
+        .stat small {
+            font-size: 10px;
+            opacity: 0.7;
+        }
+        .admin-password-prompt {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .admin-password-prompt input {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--accent-cyan);
+            padding: 8px 12px;
+            border-radius: 24px;
+            color: white;
+            flex: 1;
+            font-family: monospace;
+            outline: none;
+        }
+        .admin-password-prompt button {
+            background: var(--accent-cyan);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 24px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #0B3954;
+        }
+        .admin-password-prompt button:hover {
+            filter: brightness(0.9);
+        }
+        .error-pwd {
+            color: #ff8888;
+            font-size: 12px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -233,6 +328,7 @@
 
         <div class="dashboard-grid">
             <div class="left-column">
+                <!-- igual que antes -->
                 <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <div class="card-title">Temperatura</div>
@@ -258,23 +354,15 @@
 
                 <div class="glass-card">
                     <div class="card-title">Tendencias (Temp / Hum)</div>
-                    <div class="legend">
-                        <span class="legend-temp">● Temperatura (°C)</span>
-                        <span class="legend-hum">● Humedad (%)</span>
-                    </div>
+                    <div class="legend"><span class="legend-temp">● Temperatura (°C)</span><span class="legend-hum">● Humedad (%)</span></div>
                     <div class="chart-wrapper">
                         <svg id="trendChart" class="svg-chart" viewBox="0 0 600 180" preserveAspectRatio="none">
-                            <!-- Ejes -->
                             <line x1="40" y1="160" x2="570" y2="160" stroke="white" stroke-width="1" opacity="0.4"/>
                             <line x1="40" y1="10" x2="40" y2="160" stroke="white" stroke-width="1" opacity="0.4"/>
-                            <!-- Línea temperatura -->
                             <polyline id="tempLine" fill="none" stroke="#F06292" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points=""/>
-                            <!-- Línea humedad -->
                             <polyline id="humLine" fill="none" stroke="#4FC3F7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points=""/>
-                            <!-- Etiquetas eje Y (temperatura) -->
                             <text x="15" y="165" fill="white" font-size="8" opacity="0.5">0°</text>
                             <text x="15" y="20" fill="white" font-size="8" opacity="0.5">40°</text>
-                            <!-- Etiquetas eje Y (humedad derecha) -->
                             <text x="580" y="165" fill="white" font-size="8" opacity="0.5">0%</text>
                             <text x="580" y="20" fill="white" font-size="8" opacity="0.5">100%</text>
                         </svg>
@@ -313,6 +401,35 @@
                         <div class="card-title">Barrido de Radar</div>
                         <button id="btn-servo" class="btn-servo" onclick="toggleServo()">DESACTIVADO</button>
                     </div>
+
+                    <!-- NUEVO: Panel de Administración (ocupa ambas columnas) -->
+                    <div class="glass-card admin-card" id="adminCard" style="grid-column: span 2;">
+                        <div class="admin-reduced">
+                            <span class="lock-icon">🔐</span>
+                            <span class="admin-title">Panel de Admin</span>
+                            <span class="lock-icon">🔒</span>
+                        </div>
+                        <div class="admin-expanded">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <div class="card-title">CONSOLA DE ADMINISTRACIÓN</div>
+                                <span id="closeAdmin" style="cursor:pointer; font-size: 20px;">&times;</span>
+                            </div>
+                            <div id="adminContent">
+                                <div class="admin-stats">
+                                    <div class="stat"><span id="adminUptime">--</span><small>Uptime (segundos)</small></div>
+                                    <div class="stat"><span id="adminHeap">--</span><small>Heap libre (KB)</small></div>
+                                </div>
+                                <div class="card-title" style="margin-top: 0;">📋 LOGS RECIENTES</div>
+                                <div class="admin-log" id="adminLog">
+                                    <p>→ Conectando al ESP32...</p>
+                                </div>
+                                <div class="card-title" style="margin-top: 10px;">🌡️ Registro de Temperaturas (últimas 10)</div>
+                                <div class="admin-log" id="tempLog">
+                                    <p>---</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -329,63 +446,127 @@
         let dangerMode = false;
         let emergenciaActivaPorMQTT = false;
         let simulationActive = false;
-        
         let tempHistory = [];
         let humHistory = [];
         let currentPoints = 20;
+        let adminPassword = "admin123";   // Contraseña para el panel
+        let adminAuthenticated = false;
+        let adminPanelExpanded = false;
+        let consoleLogs = [];              // Guarda logs para mostrar en panel admin
 
-        // Umbrales
+        // Funciones auxiliares para el administrador: añadir logs
+        function addAdminLog(message) {
+            let timestamp = new Date().toLocaleTimeString();
+            consoleLogs.unshift(`[${timestamp}] ${message}`);
+            if (consoleLogs.length > 20) consoleLogs.pop();
+            updateAdminLogUI();
+        }
+
+        function updateAdminLogUI() {
+            const logDiv = document.getElementById('adminLog');
+            if (logDiv) {
+                logDiv.innerHTML = consoleLogs.map(l => `<p>→ ${l}</p>`).join('');
+                if (consoleLogs.length === 0) logDiv.innerHTML = '<p>--- Sin logs ---</p>';
+            }
+        }
+
+        function updateTempLogUI() {
+            const tempDiv = document.getElementById('tempLog');
+            if (tempDiv && tempHistory.length) {
+                let lastTemps = tempHistory.slice(-10).reverse();
+                let html = lastTemps.map((t,i) => `<p>🌡️ ${t.toFixed(1)}°C - ${new Date().toLocaleTimeString()}</p>`).join('');
+                tempDiv.innerHTML = html || '<p>--- Sin datos ---</p>';
+            }
+        }
+
+        // Actualiza estadísticas del administrador (uptime, heap)
+        function updateAdminStats() {
+            if (!adminAuthenticated) return;
+            // Simulamos el uptime con performance (tiempo desde la carga de la página)
+            let uptimeSec = Math.floor(performance.now() / 1000);
+            document.getElementById('adminUptime').innerText = uptimeSec;
+            // Simulación de heap disponible (fijo, pero en ESP32 real vendría de una API, aquí dejamos un valor fijo)
+            document.getElementById('adminHeap').innerText = (Math.random() * 100 + 200).toFixed(0);
+        }
+
+        // Intercepta los console.log originales para mostrarlos también en admin
+        const originalConsoleLog = console.log;
+        console.log = function(...args) {
+            originalConsoleLog.apply(console, args);
+            let msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ');
+            addAdminLog(msg);
+        };
+
+        // --- GESTIÓN DEL PANEL ADMIN ---
+        const adminCard = document.getElementById('adminCard');
+        function expandAdmin() {
+            if (!adminAuthenticated) {
+                // Pedir contraseña
+                let pwd = prompt("🔐 Contraseña de administrador:");
+                if (pwd === adminPassword) {
+                    adminAuthenticated = true;
+                    adminCard.classList.add('expanded');
+                    // Llenar logs iniciales
+                    addAdminLog("🔓 Acceso concedido al panel de administración.");
+                    addAdminLog("📊 Monitor de sistema iniciado.");
+                    updateTempLogUI();
+                    updateAdminStats();
+                    setInterval(updateAdminStats, 5000);
+                } else if (pwd !== null) {
+                    alert("Contraseña incorrecta");
+                }
+                return;
+            } else {
+                adminCard.classList.add('expanded');
+            }
+        }
+        function collapseAdmin() {
+            adminCard.classList.remove('expanded');
+        }
+        adminCard.addEventListener('click', (e) => {
+            // Evitamos que clics en botón interno cierren accidentalmente
+            if (e.target.id === 'closeAdmin') {
+                collapseAdmin();
+                return;
+            }
+            if (!adminCard.classList.contains('expanded')) {
+                expandAdmin();
+            }
+        });
+
+        // --- CÓDIGO ORIGINAL DE DATOS, GRÁFICA, ETC. ---
         const UMBRAL_DESACTIVACION_CRITICA = 38.0;
         const UMBRAL_DESACTIVACION_FUEGO = 35.0;
 
-        // --- DIBUJAR GRÁFICA SVG ---
         function drawSVG() {
             const pointsCount = Math.min(tempHistory.length, currentPoints);
             if (pointsCount < 2) return;
-            
             const temps = tempHistory.slice(-pointsCount);
             const hums = humHistory.slice(-pointsCount);
-            
-            // Encontrar máximos y mínimos para escalar
             let maxTemp = Math.max(...temps, 35);
             let minTemp = Math.min(...temps, 15);
             let maxHum = Math.max(...hums, 80);
             let minHum = Math.min(...hums, 20);
-            
-            // Añadir margen del 10%
             maxTemp += (maxTemp - minTemp) * 0.1;
             minTemp -= (maxTemp - minTemp) * 0.1;
             maxHum += (maxHum - minHum) * 0.1;
             minHum -= (maxHum - minHum) * 0.1;
             if (minTemp < 0) minTemp = 0;
             if (minHum < 0) minHum = 0;
-            
             const svgWidth = 600;
-            const graphLeft = 40;
-            const graphRight = 560;
-            const graphWidth = graphRight - graphLeft;
-            const graphTop = 15;
-            const graphBottom = 160;
-            const graphHeight = graphBottom - graphTop;
-            
-            let tempPoints = '';
-            let humPoints = '';
+            const graphLeft = 40, graphRight = 560, graphWidth = graphRight - graphLeft;
+            const graphTop = 15, graphBottom = 160, graphHeight = graphBottom - graphTop;
+            let tempPoints = '', humPoints = '';
             const stepX = graphWidth / (pointsCount - 1);
-            
             for (let i = 0; i < pointsCount; i++) {
                 const x = graphLeft + i * stepX;
-                // Escalar temperatura (Y inverso: 0°C abajo, 40°C arriba)
                 const yTemp = graphBottom - ((temps[i] - minTemp) / (maxTemp - minTemp)) * graphHeight;
-                // Escalar humedad
                 const yHum = graphBottom - ((hums[i] - minHum) / (maxHum - minHum)) * graphHeight;
                 tempPoints += `${x},${yTemp} `;
                 humPoints += `${x},${yHum} `;
             }
-            
             document.getElementById('tempLine').setAttribute('points', tempPoints);
             document.getElementById('humLine').setAttribute('points', humPoints);
-            
-            // Calcular promedios
             const avgTemp = (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1);
             const avgHum = (hums.reduce((a,b)=>a+b,0)/hums.length).toFixed(0);
             document.getElementById('avgText').innerHTML = `📊 Promedio (últimos ${currentPoints}): Temp ${avgTemp}°C / Hum ${avgHum}%`;
@@ -394,14 +575,11 @@
         function addDataPoint(temp, hum) {
             tempHistory.push(temp);
             humHistory.push(hum);
-            if (tempHistory.length > 200) {
-                tempHistory.shift();
-                humHistory.shift();
-            }
+            if (tempHistory.length > 200) { tempHistory.shift(); humHistory.shift(); }
             drawSVG();
+            if (adminAuthenticated) updateTempLogUI();
         }
 
-        // --- MANEJO DE ALERTA VISUAL ---
         function setDangerMode(active, motivo = "") {
             if (active === dangerMode) return;
             dangerMode = active;
@@ -411,12 +589,14 @@
                 document.getElementById('flameIcon').classList.remove('normal');
                 document.getElementById('flameStatus').innerHTML = `⚠️ ¡PELIGRO! ${motivo || "Incendio detectado"}`;
                 document.getElementById('flameStatus').style.color = '#FF3D00';
+                addAdminLog(`🚨 ALERTA: ${motivo}`);
             } else {
                 document.body.classList.remove('danger-alert');
                 document.getElementById('flameIcon').classList.remove('danger');
                 document.getElementById('flameIcon').classList.add('normal');
                 document.getElementById('flameStatus').innerHTML = 'Estado: Normal';
-                document.getElementById('flameStatus').style.color = 'inherit';
+                document.getElementById('flameStatus').style.color = '';
+                addAdminLog(`✅ Alerta desactivada.`);
             }
         }
 
@@ -429,9 +609,9 @@
                 if (!dangerMode) statusDiv.innerText = "Conexión directa con ESP32";
                 else statusDiv.innerText = "Modo peligro activo";
             }, 2000);
+            addAdminLog("🔁 Alerta reiniciada manualmente.");
         }
 
-        // --- ACTUALIZACIÓN DE UI ---
         function actualizarTemperatura(temp) {
             const tempVal = parseFloat(temp);
             document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
@@ -443,20 +623,14 @@
             else if (tempVal < 40) desc = 'Calor elevado';
             else desc = '¡PELIGRO! Calor extremo';
             document.getElementById('desc-val').innerText = desc;
-            
-            if (!dangerMode && tempVal >= 40.0 && !emergenciaActivaPorMQTT) {
-                setDangerMode(true, "Temperatura crítica > 40°C");
-            } else if (dangerMode && !emergenciaActivaPorMQTT && tempVal < UMBRAL_DESACTIVACION_CRITICA) {
-                setDangerMode(false, "");
-            }
+            if (!dangerMode && tempVal >= 40.0 && !emergenciaActivaPorMQTT) setDangerMode(true, "Temperatura crítica > 40°C");
+            else if (dangerMode && !emergenciaActivaPorMQTT && tempVal < UMBRAL_DESACTIVACION_CRITICA) setDangerMode(false, "");
         }
-
         function actualizarHumedad(hum) {
             const humVal = parseFloat(hum);
             document.getElementById('hum-val').innerHTML = `${Math.round(humVal)}<span class="unit">%</span>`;
             document.getElementById('bar-hum').style.height = Math.min(100, humVal) + '%';
         }
-
         function actualizarRSSI(rssi) {
             const el = document.getElementById('rssi-val');
             el.innerHTML = `${rssi}<span class="unit">dBm</span>`;
@@ -465,23 +639,22 @@
             else el.style.color = '#F06292';
         }
 
-        // --- OBTENER DATOS DEL ESP32 ---
-        function fetchEstado() {
-            fetch('/estado')
-                .then(response => response.json())
-                .then(data => {
-                    actualizarTemperatura(data.temp);
-                    actualizarHumedad(data.hum);
-                    actualizarRSSI(data.rssi);
-                    addDataPoint(data.temp, data.hum);
-                })
-                .catch(err => {
-                    console.log("Error al obtener datos:", err);
-                    document.getElementById('esp-status').innerText = "Error";
-                });
+        async function fetchEstado() {
+            try {
+                const response = await fetch('/estado');
+                if (!response.ok) throw new Error('HTTP error');
+                const data = await response.json();
+                actualizarTemperatura(data.temp);
+                actualizarHumedad(data.hum);
+                actualizarRSSI(data.rssi);
+                addDataPoint(data.temp, data.hum);
+                document.getElementById('esp-status').innerText = 'Online';
+            } catch(err) {
+                console.log("Error al obtener datos:", err);
+                document.getElementById('esp-status').innerText = 'Error';
+            }
         }
 
-        // --- CONTROL DEL SERVO ---
         function toggleServo() {
             const btn = document.getElementById('btn-servo');
             btn.innerText = "ENVIANDO...";
@@ -493,9 +666,11 @@
                     if(state === "ON") {
                         btn.classList.add('active');
                         btn.innerText = "SISTEMA ACTIVO";
+                        addAdminLog("🔁 Servo activado.");
                     } else {
                         btn.classList.remove('active');
                         btn.innerText = "DESACTIVADO";
+                        addAdminLog("🔁 Servo desactivado.");
                     }
                 })
                 .catch(() => {
@@ -503,10 +678,10 @@
                     btn.style.opacity = "1";
                     btn.innerText = "SIN CONEXIÓN";
                     setTimeout(() => { btn.innerText = "DESACTIVADO"; }, 3000);
+                    addAdminLog("❌ Error en comando del servo.");
                 });
         }
 
-        // --- BOTONES DE RANGO ---
         document.querySelectorAll('.range-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
@@ -517,10 +692,8 @@
         });
         document.querySelector('.range-btn[data-points="20"]').classList.add('active');
 
-        // --- BOTÓN RESETEAR ---
         document.getElementById('resetAlertBtn').addEventListener('click', resetAlertaForzado);
 
-        // --- TEMA Y PARTÍCULAS ---
         const themeBtn = document.getElementById('theme-toggle');
         themeBtn.onclick = () => {
             isDarkMode = !isDarkMode;
@@ -533,10 +706,8 @@
         const canvas = document.getElementById('weather-canvas');
         const ctx = canvas.getContext('2d');
         let particles = [];
-        
         function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
         window.onresize = resize; resize();
-        
         class Particle {
             constructor() { this.reset(); }
             reset() {
@@ -547,20 +718,18 @@
                 this.speed = Math.random() * 0.02;
             }
             update() { this.alpha += this.speed; if(this.alpha > 1 || this.alpha < 0) this.speed *= -1; }
-            draw() {
-                ctx.fillStyle = isDarkMode ? `rgba(234,226,209,${this.alpha*0.2})` : `rgba(11,57,84,${this.alpha*0.1})`;
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
-            }
+            draw() { ctx.fillStyle = isDarkMode ? `rgba(234,226,209,${this.alpha*0.2})` : `rgba(11,57,84,${this.alpha*0.1})`; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); }
         }
-        
         function initParticles() { particles = []; for(let i=0;i<60;i++) particles.push(new Particle()); }
         function animate() { ctx.clearRect(0,0,canvas.width,canvas.height); particles.forEach(p=>{p.update(); p.draw();}); requestAnimationFrame(animate); }
-        
         initParticles(); animate();
-        
-        // Iniciar
+
         fetchEstado();
         setInterval(fetchEstado, 2000);
+
+        // Inicializar admin logs con algunos mensajes previos
+        addAdminLog("🚀 Página cargada. Sistema iniciado.");
+        addAdminLog("⚙️ Panel de administración protegido con contraseña.");
     </script>
 </body>
 </html>
