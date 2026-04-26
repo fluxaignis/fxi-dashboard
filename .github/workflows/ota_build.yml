@@ -7,7 +7,7 @@ on:
     paths:
       - 'fxi-dashboard.ino'
       - '*.h'
-      - 'data/index.html'        # también reacciona a cambios en el HTML
+      - 'data/index.html'
   workflow_dispatch:
 
 jobs:
@@ -63,7 +63,7 @@ jobs:
           publish_branch: gh-pages
           publish_dir: ./
           keep_files: false
-          force_orphan: true                                      # Fuerza la sobrescritura completa
+          force_orphan: true
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
           commit_message: "Actualizar firmware ${{ steps.vars.outputs.VERSION }}"
