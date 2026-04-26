@@ -4,54 +4,55 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'fxi-dashboard.ino'      # Solo si cambia el código
+      - '*.h'
+  workflow_dispatch:              # Permite ejecución manual
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Descargar código del Repo
+      - name: Clonar repositorio
         uses: actions/checkout@v4
 
-      - name: 2. Instalar Arduino CLI
+      - name: Instalar Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
-      - name: 3. Configurar plataforma ESP32
+      - name: Configurar plataforma ESP32
         run: |
           arduino-cli core update-index
           arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
 
-      - name: 4. Instalar Librerías
+      - name: Instalar Librerías
         run: |
           arduino-cli lib install "DHT sensor library"
           arduino-cli lib install "Adafruit Unified Sensor"
           arduino-cli lib install "PubSubClient"
           arduino-cli lib install "ESP32Servo"
 
-      - name: 5. Inyectar Versión y Compilar
+      - name: Obtener versión (número de ejecución)
+        id: vars
+        run: echo "VERSION=1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: Inyectar versión y compilar
         run: |
-          # Generamos la versión basada en la fecha y hora actual
-          V_AUTO=$(date +'%Y%m%d%H%M')
-          echo "Preparando firmware versión: $V_AUTO"
-          
-          # Guardamos esa versión en version.txt
-          echo $V_AUTO > version.txt
-          
-          # Inyectamos el número directamente en el código .ino
-          sed -i "s/__VERSION__/$V_AUTO/g" fxi-dashboard.ino
-          
-          # Compilamos el código ya modificado
+          # Reemplazar el marcador AUTO_VERSION por el número de versión
+          sed -i "s/AUTO_VERSION/${{ steps.vars.outputs.VERSION }}/g" fxi-dashboard.ino
+          # Compilar
           arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir ./build fxi-dashboard.ino
 
-      - name: 6. Preparar binario
+      - name: Preparar binario y version.txt
         run: |
           cp ./build/fxi-dashboard.ino.bin ./firmware.bin
+          echo "${{ steps.vars.outputs.VERSION }}" > version.txt
 
-      - name: 7. Subir cambios al repositorio
+      - name: Subir cambios al repositorio (solo si hay cambios)
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add firmware.bin version.txt
-          git commit -m "🚀 Auto-update firmware [skip ci]"
+          git commit -m "🚀 Auto-update firmware ${{ steps.vars.outputs.VERSION }} [skip ci]" || echo "No hay cambios"
           git push
