@@ -155,7 +155,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 // ==================== MANEJADORES WEB ====================
 void handleRoot() {
-  // Cabeceras para evitar caché del navegador
+  // Cabeceras anti-caché
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   server.sendHeader("Pragma", "no-cache");
   server.sendHeader("Expires", "-1");
@@ -300,7 +300,7 @@ bool actualizarHTML() {
 
   addLog("info", "Descargando nueva versión del HTML...");
   HTTPClient http;
-  http.setTimeout(10000);                         // 10 segundos timeout
+  http.setTimeout(10000);
   http.begin(espClient, urlHTML);
   int httpCode = http.GET();
 
@@ -318,7 +318,6 @@ bool actualizarHTML() {
     return false;
   }
 
-  // Comparar con el actual
   File f = LittleFS.open("/index.html", "r");
   if (f) {
     String actualHTML = f.readString();
@@ -329,7 +328,6 @@ bool actualizarHTML() {
     }
   }
 
-  // Guardar nuevo HTML
   f = LittleFS.open("/index.html", "w");
   if (!f) {
     addLog("error", "Error al guardar HTML");
@@ -375,7 +373,7 @@ void chequearActualizacionGitHub() {
           break;
         case HTTP_UPDATE_OK:
           guardarVersion(versionGitHub);
-          actualizarHTML();                    // también actualizar HTML
+          actualizarHTML();
           addLog("success", "¡Actualización completada! Reiniciando...");
           ESP.restart();
           break;
@@ -390,13 +388,6 @@ void chequearActualizacionGitHub() {
   http.end();
 }
 
-// Función para reiniciar la alerta desde el botón del HTML
-void resetAlertaForzado() {
-  emergenciaActivaPorMQTT = false;
-  if (dangerMode) setDangerMode(false, "");
-  addLog("info", "Alerta reiniciada manualmente desde el panel.");
-}
-
 // ==================== SETUP ====================
 void setup() {
   Serial.begin(115200);
@@ -407,14 +398,12 @@ void setup() {
   pinMode(PIN_ROJO, OUTPUT); pinMode(PIN_VERDE, OUTPUT); pinMode(PIN_AZUL, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT); noTone(PIN_BUZZER);
 
-  // Servos
   ESP32PWM::allocateTimer(0); ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2); ESP32PWM::allocateTimer(3);
   servoHorizontal.setPeriodHertz(50); servoHorizontal.attach(PIN_SERVO_H, 500, 2400);
   servoVertical.setPeriodHertz(50); servoVertical.attach(PIN_SERVO_V, 500, 2400);
   servoHorizontal.write(SERVO_H_NEUTRAL); servoVertical.write(20);
 
-  // LittleFS
   if (!LittleFS.begin()) {
     Serial.println("Error al montar LittleFS");
     addLog("error", "Error al montar LittleFS");
@@ -424,17 +413,14 @@ void setup() {
   FIRMWARE_VERSION = leerVersion();
   addLog("info", "Firmware version: " + FIRMWARE_VERSION);
 
-  // Hotspot (AP)
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAPConfig(apIP, apGateway, apSubnet);
   WiFi.softAP(ap_ssid, ap_password);
   addLog("info", "Hotspot creado: " + String(ap_ssid) + " - IP: " + WiFi.softAPIP().toString());
 
-  // DNS captive portal
   dnsServer.start(53, "*", apIP);
   addLog("info", "DNS Captive Portal activado");
 
-  // mDNS
   if (MDNS.begin("fluxaignis")) {
     addLog("info", "mDNS iniciado: fluxaignis.local");
     MDNS.addService("http", "tcp", 80);
@@ -442,7 +428,6 @@ void setup() {
     addLog("warn", "Error al iniciar mDNS");
   }
 
-  // WiFi externo
   WiFi.begin(ssid, password);
   int intentos = 0;
   while (WiFi.status() != WL_CONNECTED && intentos < 20) {
@@ -460,13 +445,11 @@ void setup() {
     addLog("warn", "No se pudo conectar a red externa. Modo offline + hotspot.");
   }
 
-  // ArduinoOTA (clásico)
   ArduinoOTA.setHostname("fluxaignis_ota");
   ArduinoOTA.setPassword("12345678");
   ArduinoOTA.begin();
   addLog("info", "OTA clásico iniciado.");
 
-  // Servidor web
   server.on("/", handleRoot);
   server.on("/estado", handleEstado);
   server.on("/toggleServo", handleToggle);
@@ -480,13 +463,11 @@ void setup() {
   addLog("info", "Servidor web listo. Accede a http://192.168.1.1");
 }
 
-// ==================== LOOP PRINCIPAL ====================
 void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
   ArduinoOTA.handle();
 
-  // MQTT
   if (WiFi.status() == WL_CONNECTED) {
     if (!client.connected()) {
       if (client.connect("ESP32_FXI", "Admin", "FluxaIgnis2026")) {
@@ -501,7 +482,6 @@ void loop() {
 
   unsigned long ahora = millis();
 
-  // DHT11 cada 2 segundos
   if (ahora - ultimoTiempoDHT >= 2000) {
     float t = dht.readTemperature();
     float h = dht.readHumidity();
@@ -512,7 +492,6 @@ void loop() {
 
   rssiGuardado = WiFi.RSSI();
 
-  // Detección de fuego
   int lecturaLlama = (simularFuego) ? 300 : analogRead(PIN_LLAMA);
   if (lecturaLlama < 50) lecturaLlama = 4095;
   if (estadoActual == REPOSO && lecturaLlama < UMBRAL_FUEGO) {
@@ -524,7 +503,6 @@ void loop() {
     }
   }
 
-  // Temperatura crítica
   if (tempGuardada >= TEMP_CRITICA) {
     if (!emergenciaEnviada) {
       enviarNotificacionMQTT("CALOR CRITICO", tempGuardada);
@@ -535,7 +513,6 @@ void loop() {
     emergenciaEnviada = false;
   }
 
-  // LEDs y buzzer
   if (estadoActual != REPOSO) {
     setColor(255, 0, 0);
     if ((ahora / 300) % 2 == 0) tone(PIN_BUZZER, 2000);
@@ -548,7 +525,6 @@ void loop() {
     setColor(r, g, b);
   }
 
-  // Máquina de estados del servo
   switch (estadoActual) {
     case REPOSO: break;
     case ESPERANDO_AGUA:
@@ -582,7 +558,6 @@ void loop() {
       break;
   }
 
-  // Envío de datos MQTT
   if (WiFi.status() == WL_CONNECTED && client.connected()) {
     if (ahora - cronometroDatos > 2000) {
       cronometroDatos = ahora;
@@ -597,13 +572,11 @@ void loop() {
     }
   }
 
-  // Chequeo periódico de OTA
   if (ahora - ultimoChequeoOTA >= INTERVALO_OTA) {
     ultimoChequeoOTA = ahora;
     chequearActualizacionGitHub();
   }
 
-  // Actualización periódica del HTML (cada 24h)
   static unsigned long ultimaActualizacionHTML = 0;
   if (ahora - ultimaActualizacionHTML >= 86400000UL) {
     if (WiFi.status() == WL_CONNECTED) {
