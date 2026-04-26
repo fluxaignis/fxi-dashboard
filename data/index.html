@@ -132,7 +132,7 @@
             width: 100%;
             transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .btn-update, .btn-reset, .action-square {
+        .btn-square {
             background: var(--accent-blue);
             color: #0B3954;
             border: none;
@@ -141,12 +141,13 @@
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
+            text-align: center;
         }
         .btn-reset {
             background: var(--chart-pink);
             color: white;
         }
-        .btn-update:hover, .btn-reset:hover, .action-square:hover { transform: translateY(-2px); }
+        .btn-square:hover { transform: translateY(-2px); }
         #esp-status {
             font-size: 10px;
             padding: 3px 8px;
@@ -595,16 +596,14 @@
                     </div>
 
                     <!-- Nuevos botones cuadrados (Reconectar Sistema y Resetear Alerta) -->
-                    <div class="glass-card action-square-card" style="grid-column: span 1; text-align: center; cursor: pointer;" onclick="location.reload()">
-                        <span class="action-icon">🔄</span>
-                        <div class="action-label" style="margin-top: 8px; font-weight: 500;">Reconectar Sistema</div>
+                    <div class="glass-card" style="grid-column: span 1; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="location.reload()">
+                        <div class="btn-square" style="width: 100%;">🔄 Reconectar Sistema</div>
                     </div>
-                    <div class="glass-card action-square-card" style="grid-column: span 1; text-align: center; cursor: pointer;" id="resetAlertBtnSquare">
-                        <span class="action-icon">🔄</span>
-                        <div class="action-label" style="margin-top: 8px; font-weight: 500;">Resetear Alerta</div>
+                    <div class="glass-card" style="grid-column: span 1; display: flex; align-items: center; justify-content: center; cursor: pointer;" id="resetAlertBtnSquare">
+                        <div class="btn-square btn-reset" style="width: 100%;">🔄 Resetear Alerta</div>
                     </div>
 
-                    <!-- Panel Administración -->
+                    <!-- Panel Administración (ahora a la derecha, debajo de los botones) -->
                     <div class="glass-card admin-card" id="adminCard" style="grid-column: span 2;">
                         <div class="admin-reduced">
                             <span class="lock-icon">🔐</span>
