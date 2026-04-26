@@ -83,12 +83,23 @@
             grid-template-columns: 1.8fr 1.2fr;
             gap: 25px;
         }
-        .left-column, .right-column {
+        .left-column {
             display: flex;
             flex-direction: column;
             gap: 25px;
         }
-        .right-grid {
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        /* Nueva estructura: dos columnas dentro del área derecha */
+        .right-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 20px;
+        }
+        .right-small-cards {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
@@ -157,10 +168,11 @@
         }
         @media (max-width: 850px) {
             .dashboard-grid { grid-template-columns: 1fr; }
-            .right-grid { grid-template-columns: 1fr 1fr; }
+            .right-wrapper { grid-template-columns: 1fr; }
+            .right-small-cards { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 480px) {
-            .right-grid { grid-template-columns: 1fr; }
+            .right-small-cards { grid-template-columns: 1fr; }
             .header { flex-direction: column; align-items: flex-start; }
             #theme-toggle { margin-left: 0; }
         }
@@ -259,10 +271,10 @@
 
         /* ----- ADMIN PANEL ----- */
         .admin-card {
-            grid-column: span 2;
             transition: all 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1);
             cursor: pointer;
             overflow: hidden;
+            height: fit-content;
         }
         .admin-card .admin-reduced {
             display: flex;
@@ -517,7 +529,7 @@
         </div>
 
         <div class="dashboard-grid">
-            <!-- Columna izquierda -->
+            <!-- Columna izquierda (sin cambios) -->
             <div class="left-column">
                 <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
@@ -570,41 +582,42 @@
                 </div>
             </div>
 
-            <!-- Columna derecha -->
+            <!-- Columna derecha: nueva estructura de dos columnas -->
             <div class="right-column">
-                <div class="right-grid">
-                    <div class="glass-card flame-card" style="grid-column: span 2;">
-                        <div class="flame-icon normal" id="flameIcon">🔥</div>
-                        <div class="flame-status" id="flameStatus">Estado: Normal</div>
-                        <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
-                    </div>
-                    <div class="glass-card">
-                        <div class="card-title">Humedad</div>
-                        <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
-                    </div>
-                    <div class="glass-card">
-                        <div class="card-title">Señal RSSI</div>
-                        <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
-                    </div>
-                    <div class="glass-card">
-                        <div class="card-title">Estado Red</div>
-                        <div id="net-status" style="color: var(--accent-cyan);">Conexión directa con ESP32</div>
-                    </div>
-                    <div class="glass-card">
-                        <div class="card-title">Barrido de Radar</div>
-                        <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
+                <div class="right-wrapper">
+                    <!-- Columna izquierda de la derecha: cuadros pequeños -->
+                    <div class="right-small-cards">
+                        <div class="glass-card flame-card" style="grid-column: span 2; text-align: center;">
+                            <div class="flame-icon normal" id="flameIcon">🔥</div>
+                            <div class="flame-status" id="flameStatus">Estado: Normal</div>
+                            <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
+                        </div>
+                        <div class="glass-card">
+                            <div class="card-title">Humedad</div>
+                            <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
+                        </div>
+                        <div class="glass-card">
+                            <div class="card-title">Señal RSSI</div>
+                            <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
+                        </div>
+                        <div class="glass-card">
+                            <div class="card-title">Estado Red</div>
+                            <div id="net-status" style="color: var(--accent-cyan);">Conexión directa con ESP32</div>
+                        </div>
+                        <div class="glass-card">
+                            <div class="card-title">Barrido de Radar</div>
+                            <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
+                        </div>
+                        <div class="glass-card" style="display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="location.reload()">
+                            <div class="btn-square" style="width: 100%;">🔄 Reconectar Sistema</div>
+                        </div>
+                        <div class="glass-card" style="display: flex; align-items: center; justify-content: center; cursor: pointer;" id="resetAlertBtnSquare">
+                            <div class="btn-square btn-reset" style="width: 100%;">🔄 Resetear Alerta</div>
+                        </div>
                     </div>
 
-                    <!-- Nuevos botones cuadrados (Reconectar Sistema y Resetear Alerta) -->
-                    <div class="glass-card" style="grid-column: span 1; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="location.reload()">
-                        <div class="btn-square" style="width: 100%;">🔄 Reconectar Sistema</div>
-                    </div>
-                    <div class="glass-card" style="grid-column: span 1; display: flex; align-items: center; justify-content: center; cursor: pointer;" id="resetAlertBtnSquare">
-                        <div class="btn-square btn-reset" style="width: 100%;">🔄 Resetear Alerta</div>
-                    </div>
-
-                    <!-- Panel Administración (ahora a la derecha, debajo de los botones) -->
-                    <div class="glass-card admin-card" id="adminCard" style="grid-column: span 2;">
+                    <!-- Columna derecha de la derecha: Panel de Administración -->
+                    <div class="glass-card admin-card" id="adminCard">
                         <div class="admin-reduced">
                             <span class="lock-icon">🔐</span>
                             <span class="admin-title">Panel de Admin</span>
@@ -678,7 +691,6 @@
                 </div>
             </div>
         </div>
-        <!-- Footer eliminado, los botones están dentro de la columna derecha -->
     </div>
 
     <!-- Modales y Toast -->
@@ -1146,7 +1158,6 @@
             });
         });
         document.querySelector('.range-btn[data-points="20"]').classList.add('active');
-        // Botón "Resetear Alerta" cuadrado
         document.getElementById('resetAlertBtnSquare').addEventListener('click', resetAlertaForzado);
         document.getElementById('btn-servo').addEventListener('click', toggleServo);
 
