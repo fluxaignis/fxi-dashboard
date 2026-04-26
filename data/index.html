@@ -197,14 +197,25 @@
         }
         .stat-label { font-size: 10px; text-transform: uppercase; color: var(--text-sec); }
         .stat-value { font-size: 18px; font-weight: bold; margin-top: 5px; }
-        .progress-bar {
+        /* Barra apilada para almacenamiento: azul usado, naranja libre */
+        .progress-stack {
             background: rgba(0,0,0,0.4);
             border-radius: 8px;
             height: 6px;
             margin-top: 8px;
             overflow: hidden;
+            display: flex;
         }
-        .progress-fill { background: var(--accent-cyan); width: 0%; height: 100%; }
+        .progress-used {
+            background: var(--accent-cyan);
+            height: 100%;
+            width: 0%;
+        }
+        .progress-free {
+            background: #FFA726;
+            height: 100%;
+            width: 0%;
+        }
 
         .action-blocks {
             display: grid;
@@ -395,7 +406,6 @@
                 return await res.json();
             } catch(e) {
                 console.error("Error en /info:", e);
-                // Fallback con valores básicos (no usamos datos falsos)
                 return null;
             }
         }
@@ -416,11 +426,25 @@
             if (!info) return;
             const statsGrid = document.getElementById('statsGrid');
             if (!statsGrid) return;
+            // Calcular porcentaje usado y libre (para barra apilada)
+            const usedPercent = info.littlefs_percent || 0;
+            const freePercent = 100 - usedPercent;
+            // Total de la partición LittleFS (128KB)
+            const totalKB = 128;
+            const usedKB = (usedPercent * totalKB) / 100;
+            const freeKB = totalKB - usedKB;
             statsGrid.innerHTML = `
                 <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${info.firmware || '--'}</div></div>
                 <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(info.uptime || 0)}</div></div>
                 <div class="stat-card"><div class="stat-label">RAM (Heap)</div><div class="stat-value">${info.heap_percent || 0}%<div class="progress-bar"><div class="progress-fill" style="width: ${info.heap_percent || 0}%"></div></div></div></div>
-                <div class="stat-card"><div class="stat-label">Almacenamiento LittleFS</div><div class="stat-value">${info.littlefs_percent || 0}%<div class="progress-bar"><div class="progress-fill" style="width: ${info.littlefs_percent || 0}%"></div></div></div></div>
+                <div class="stat-card">
+                    <div class="stat-label">Almacenamiento LittleFS</div>
+                    <div class="stat-value">${usedPercent}% (${usedKB.toFixed(1)} KB de ${totalKB} KB)</div>
+                    <div class="progress-stack">
+                        <div class="progress-used" style="width: ${usedPercent}%;"></div>
+                        <div class="progress-free" style="width: ${freePercent}%;"></div>
+                    </div>
+                </div>
                 <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${info.ip_ap || '--'}</div></div>
                 <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${info.ip_sta || '--'}</div></div>
                 <div class="stat-card"><div class="stat-label">MQTT</div><div class="stat-value">${info.mqtt_status || '--'}</div></div>
@@ -454,10 +478,8 @@
                 } else if (cmd === 'update_fw') {
                     alert("Iniciando actualización de firmware...");
                 } else if (cmd === 'update_html') {
-                    // Forzar recarga de página después de la actualización para evitar caché
                     if (res.ok) {
                         alert("HTML actualizado. La página se recargará.");
-                        // Recargar añadiendo un parámetro de versión (timestamp) para evitar caché
                         const timestamp = Date.now();
                         window.location.href = window.location.pathname + '?v=' + timestamp;
                     } else {
@@ -720,12 +742,21 @@
             if (e.target === closeAdminBtn || e.target.parentElement === closeAdminBtn) { collapseAdmin(); return; }
             if (!adminCard.classList.contains('expanded')) expandAdmin();
         });
-        // Hacer que las secciones (minimizar/maximizar) funcionen
+        // Hacer que las secciones (minimizar/maximizar) funcionen como acordeón (solo una abierta)
         document.querySelectorAll('.admin-section-header').forEach(header => {
             header.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const section = header.closest('.admin-section');
-                if (section) section.classList.toggle('open');
+                const currentSection = header.closest('.admin-section');
+                if (!currentSection) return;
+                const isCurrentlyOpen = currentSection.classList.contains('open');
+                // Cerrar todas las secciones
+                document.querySelectorAll('.admin-section').forEach(section => {
+                    section.classList.remove('open');
+                });
+                // Si la actual no estaba abierta, la abrimos
+                if (!isCurrentlyOpen) {
+                    currentSection.classList.add('open');
+                }
             });
         });
         document.getElementById('toggleTimestampBtn')?.addEventListener('click', () => {
