@@ -23,7 +23,7 @@ const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashb
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/firmware.bin";
 
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 15000;
+const unsigned long INTERVALO_OTA = 60000;
 
 // --- MAPEO DE PINES ---
 #define DHTPIN 27
@@ -200,6 +200,7 @@ void chequearActualizacionGitHub() {
           break;
         case HTTP_UPDATE_OK:
           Serial.println("¡Actualización completada! El ESP32 se reiniciará ahora.");
+          ESP.restart();   // <--- Línea clave
           break;
       }
     } else {
@@ -240,6 +241,9 @@ void setup() {
     file = root.openNextFile();
   }
 
+    Serial.print("Firmware version: ");
+    Serial.println(FIRMWARE_VERSION);
+  
   // ========== 1. Configurar punto de acceso (AP) ==========
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAPConfig(apIP, apGateway, apSubnet);
