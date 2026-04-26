@@ -58,7 +58,7 @@
             z-index: 0; pointer-events: none;
         }
         .main-content {
-            position: relative; z-index: 1;
+            position: relative; z-index: 2;
             max-width: 1200px; margin: 0 auto;
             padding: 40px 20px;
             display: flex; flex-direction: column;
@@ -423,6 +423,88 @@
             height: 100px;
         }
         #pingCanvas { width: 100%; height: 80px; background: rgba(0,0,0,0.2); border-radius: 12px; }
+
+        /* ========== MODAL Y TOAST ========== */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 28px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            animation: fadeInUp 0.3s ease;
+        }
+        .modal-content h3 {
+            margin-top: 0;
+            color: var(--accent-cyan);
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            margin: 15px 0;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            color: var(--text-main);
+            font-size: 1rem;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        .modal-buttons button {
+            padding: 8px 20px;
+            border-radius: 40px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .modal-buttons button:first-child {
+            background: var(--accent-blue);
+            color: #0B3954;
+        }
+        .modal-buttons button:last-child {
+            background: var(--chart-pink);
+            color: white;
+        }
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-weight: bold;
+            z-index: 1100;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            white-space: nowrap;
+            font-size: 14px;
+        }
+        .toast.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -600,7 +682,65 @@
         </div>
     </div>
 
+    <!-- Modales y Toast -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Acceso restringido</h3>
+            <div id="modalBody">Introduce la contraseña de administrador:</div>
+            <input type="password" id="modalInput" placeholder="Contraseña">
+            <div class="modal-buttons">
+                <button id="modalConfirm">Confirmar</button>
+                <button id="modalCancel">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    <div id="toast" class="toast">Mensaje</div>
+
     <script>
+        // ==================== SISTEMA DE TOAST Y MODAL ====================
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.color = isError ? '#F06292' : 'var(--accent-cyan)';
+            toast.style.borderColor = isError ? '#F06292' : 'var(--accent-cyan)';
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        let modalResolve = null;
+        const modal = document.getElementById('modal');
+        const modalInput = document.getElementById('modalInput');
+        const modalConfirm = document.getElementById('modalConfirm');
+        const modalCancel = document.getElementById('modalCancel');
+
+        function showPasswordModal(title, message, placeholder = 'Contraseña') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').textContent = message;
+            modalInput.placeholder = placeholder;
+            modalInput.value = '';
+            modal.style.display = 'flex';
+            modalInput.focus();
+            return new Promise((resolve) => {
+                modalResolve = resolve;
+            });
+        }
+
+        function closeModal(result) {
+            modal.style.display = 'none';
+            if (modalResolve) {
+                modalResolve(result);
+                modalResolve = null;
+            }
+        }
+
+        modalConfirm.onclick = () => closeModal(modalInput.value);
+        modalCancel.onclick = () => closeModal(null);
+        modalInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') closeModal(modalInput.value);
+        });
+
         // ==================== VARIABLES GLOBALES ====================
         let isDarkMode = true;
         let dangerMode = false;
@@ -737,29 +877,42 @@
             return `${d}d ${h}h ${m}m ${s}s`;
         }
 
-        // ==================== COMANDOS ====================
+        // ==================== COMANDOS (con toasts) ====================
         async function sendCommand(cmd) {
             addSystemLog(`Comando enviado: ${cmd}`, 'info');
             try {
                 const res = await fetch(`/cmd?action=${cmd}`);
                 const text = await res.text();
-                if (cmd === 'restart') alert("Reiniciando ESP32...");
-                else if (cmd === 'check_ota') alert("Comprobando actualización...");
-                else if (cmd === 'toggle_sim') {
+                if (cmd === 'restart') {
+                    showToast("Reiniciando ESP32...");
+                    setTimeout(() => location.reload(), 3000);
+                } else if (cmd === 'check_ota') {
+                    showToast("Comprobando actualizaciones...");
+                } else if (cmd === 'toggle_sim') {
                     simulationActive = !simulationActive;
                     addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn');
+                    showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`);
                 } else if (cmd === 'clear_logs') {
                     document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs limpiados localmente</div>';
-                } else if (cmd === 'update_fw') alert("Iniciando actualización de firmware...");
-                else if (cmd === 'update_html') {
+                    showToast("Logs locales limpiados");
+                } else if (cmd === 'update_fw') {
+                    showToast("Iniciando actualización de firmware...");
+                } else if (cmd === 'update_html') {
                     if (res.ok) {
-                        alert("HTML actualizado. La página se recargará.");
-                        window.location.href = window.location.pathname + '?v=' + Date.now();
-                    } else alert("Error al actualizar el HTML");
+                        showToast("HTML actualizado. La página se recargará.");
+                        setTimeout(() => {
+                            window.location.href = window.location.pathname + '?v=' + Date.now();
+                        }, 1000);
+                    } else {
+                        showToast("Error al actualizar el HTML", true);
+                    }
+                } else {
+                    showToast(`Comando ${cmd} ejecutado`);
                 }
             } catch(e) {
                 console.error(e);
                 addSystemLog(`Error al ejecutar ${cmd}`, 'error');
+                showToast(`Error al ejecutar ${cmd}`, true);
             }
         }
 
@@ -825,16 +978,19 @@
             ctx.stroke();
         }
 
-        // ==================== ADMIN PANEL ====================
-        function expandAdmin() {
+        // ==================== ADMIN PANEL (con modal) ====================
+        async function expandAdmin() {
             if (!adminAuthenticated) {
-                let pwd = prompt("🔐 Contraseña de administrador:");
+                const pwd = await showPasswordModal("Acceso restringido", "Introduce la contraseña de administrador:", "Contraseña");
                 if (pwd === adminPassword) {
                     adminAuthenticated = true;
                     adminCard.classList.add('expanded');
                     startAdminServices();
                     addSystemLog("🔓 Acceso concedido al panel de administración.", 'info');
-                } else if (pwd !== null) alert("Contraseña incorrecta");
+                    showToast("Acceso concedido");
+                } else if (pwd !== null) {
+                    showToast("Contraseña incorrecta", true);
+                }
                 return;
             } else {
                 adminCard.classList.add('expanded');
