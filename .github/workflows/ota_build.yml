@@ -63,7 +63,7 @@ jobs:
           publish_branch: gh-pages
           publish_dir: ./
           keep_files: false
-          force: true                                      # <--- Solución al conflicto de push
+          force_orphan: true                                      # Fuerza la sobrescritura completa
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
           commit_message: "Actualizar firmware ${{ steps.vars.outputs.VERSION }}"
