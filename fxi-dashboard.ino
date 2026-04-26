@@ -250,31 +250,25 @@ void handleCmd() {
     server.send(200, "text/plain", "OK");
     delay(100);
     ESP.restart();
-  } 
-  else if (action == "check_ota") {
+  } else if (action == "check_ota") {
     ultimoChequeoOTA = 0;
     server.send(200, "text/plain", "OK");
-  } 
-  else if (action == "toggle_sim") {
+  } else if (action == "toggle_sim") {
     simularFuego = !simularFuego;
     addLog("warn", simularFuego ? "Simulación de fuego ACTIVADA" : "Simulación DESACTIVADA");
     server.send(200, "text/plain", "OK");
-  } 
-  else if (action == "clear_logs") {
+  } else if (action == "clear_logs") {
     logIndex = 0;
     logCount = 0;
     addLog("info", "Logs limpiados por comando");
     server.send(200, "text/plain", "OK");
-  } 
-  else if (action == "update_fw") {
+  } else if (action == "update_fw") {
     server.send(200, "text/plain", "OK");
-    chequearActualizacionGitHub();   // fuerza OTA
-  } 
-  else if (action == "update_html") {
+    chequearActualizacionGitHub();
+  } else if (action == "update_html") {
     server.send(200, "text/plain", "OK");
     actualizarHTML();
-  } 
-  else {
+  } else {
     server.send(400, "text/plain", "Unknown action");
   }
 }
@@ -309,7 +303,7 @@ bool actualizarHTML() {
 
   addLog("info", "Descargando nueva versión del HTML...");
   HTTPClient http;
-  http.setTimeout(10000);                         // 10 segundos timeout
+  http.setTimeout(10000);
   http.begin(espClient, urlHTML);
   int httpCode = http.GET();
 
@@ -384,7 +378,7 @@ void chequearActualizacionGitHub() {
           break;
         case HTTP_UPDATE_OK:
           guardarVersion(versionGitHub);
-          actualizarHTML();                    // también actualizar HTML
+          actualizarHTML();
           addLog("success", "¡Actualización completada! Reiniciando...");
           ESP.restart();
           break;
@@ -458,6 +452,9 @@ void setup() {
     espClient.setInsecure();
     client.setServer(mqtt_server, 8883);
     client.setCallback(callback);
+
+    // 👇 COMPROBAR ACTUALIZACIÓN NADA MÁS CONECTARSE
+    chequearActualizacionGitHub();
   } else {
     addLog("warn", "No se pudo conectar a red externa. Modo offline + hotspot.");
   }
@@ -480,6 +477,9 @@ void setup() {
   server.begin();
 
   addLog("info", "Servidor web listo. Accede a http://192.168.1.1");
+
+  // Inicializar el temporizador para OTA periódico
+  ultimoChequeoOTA = millis();
 }
 
 // ==================== LOOP PRINCIPAL ====================
@@ -599,7 +599,7 @@ void loop() {
     }
   }
 
-  // Chequeo periódico de OTA
+  // Chequeo periódico de OTA (cada INTERVALO_OTA)
   if (ahora - ultimoChequeoOTA >= INTERVALO_OTA) {
     ultimoChequeoOTA = ahora;
     chequearActualizacionGitHub();
