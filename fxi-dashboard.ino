@@ -16,6 +16,8 @@
 String FIRMWARE_VERSION = "AUTO_VERSION"; // Se sobrescribirá al leer de LittleFS
 const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/version.txt";
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/firmware.bin";
+const char* urlHTML = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/esp32/index.html";
+
 unsigned long ultimoChequeoOTA = 0;
 const unsigned long INTERVALO_OTA = 60000; // 1 minuto para pruebas
 
@@ -184,6 +186,46 @@ String leerVersion() {
   return v;
 }
 
+// --- Actualización automática del HTML desde GitHub ---
+bool actualizarHTML() {
+  if (WiFi.status() != WL_CONNECTED) return false;
+
+  Serial.println("Descargando nueva versión del HTML...");
+  HTTPClient http;
+  http.begin(espClient, urlHTML);
+  int httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("Error al descargar HTML: %d\n", httpCode);
+    http.end();
+    return false;
+  }
+
+  String nuevoHTML = http.getString();
+  http.end();
+
+  // Leer el HTML actual de LittleFS para comparar
+  File f = LittleFS.open("/index.html", "r");
+  if (f) {
+    String actualHTML = f.readString();
+    f.close();
+    if (actualHTML == nuevoHTML) {
+      Serial.println("HTML ya está actualizado");
+      return false;
+    }
+  }
+
+  // Guardar el nuevo HTML
+  f = LittleFS.open("/index.html", "w");
+  if (!f) {
+    Serial.println("Error al guardar HTML");
+    return false;
+  }
+  f.print(nuevoHTML);
+  f.close();
+  Serial.println("HTML actualizado correctamente");
+  return true;
+}
+
 // --- ACTUALIZACIÓN OTA GITHUB (modificada) ---
 void chequearActualizacionGitHub() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -219,8 +261,10 @@ void chequearActualizacionGitHub() {
           Serial.println("No hay actualizaciones disponibles (HTTP_UPDATE_NO_UPDATES).");
           break;
         case HTTP_UPDATE_OK:
-          // Guardar la nueva versión antes de reiniciar
+          // Guardar nueva versión del firmware
           guardarVersion(versionGitHub);
+          // Actualizar también el HTML (descarga la última versión)
+          actualizarHTML();
           Serial.println("¡Actualización completada! Versión guardada. Reiniciando...");
           ESP.restart();
           break;
@@ -330,7 +374,7 @@ void setup() {
     Serial.print(" - http://");
     Serial.println(WiFi.localIP());
   }
-  Serial.println("Sistema híbrido (AP+STA) con MQTT, LittleFS y OTA.");
+  Serial.println("Sistema híbrido (AP+STA) con MQTT, LittleFS, OTA y actualización automática de HTML.");
 }
 
 void loop() {
@@ -391,16 +435,17 @@ void loop() {
     emergenciaEnviada = false;
   }
 
-  // ========== 3. INDICADORES ==========
+  // ========== 3. INDICADORES (LED RGB con color CIAN en reposo normal) ==========
   if (estadoActual != REPOSO) {
+    // Modo emergencia: rojo fijo con parpadeo de sonido
     setColor(255, 0, 0);
     if ((ahora / 300) % 2 == 0) tone(PIN_BUZZER, 2000);
     else noTone(PIN_BUZZER);
-    } else {
+  } else {
     noTone(PIN_BUZZER);
     int r = (tempGuardada >= 35) ? 255 : (tempGuardada >= 30 ? 255 : 0);
     int g = (tempGuardada >= 35) ? 0 : (tempGuardada >= 30 ? 100 : 255);
-    int b = (tempGuardada < 30) ? 255 : 0;   // <-- añadido azul para cian
+    int b = (tempGuardada < 30) ? 255 : 0;   // Añadido azul para el cian
     setColor(r, g, b);
   }
 
@@ -457,5 +502,14 @@ void loop() {
   if (ahora - ultimoChequeoOTA >= INTERVALO_OTA) {
     ultimoChequeoOTA = ahora;
     chequearActualizacionGitHub();
+  }
+
+  // ========== ACTUALIZACIÓN PERIÓDICA DEL HTML (cada 24h) ==========
+  static unsigned long ultimaActualizacionHTML = 0;
+  if (ahora - ultimaActualizacionHTML >= 86400000UL) { // 24 horas
+    if (WiFi.status() == WL_CONNECTED) {
+      actualizarHTML();
+    }
+    ultimaActualizacionHTML = ahora;
   }
 }
