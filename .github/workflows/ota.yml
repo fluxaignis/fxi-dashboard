@@ -34,6 +34,7 @@ jobs:
           arduino-cli lib install "Adafruit Unified Sensor"
           arduino-cli lib install "PubSubClient"
           arduino-cli lib install "ESP32Servo"
+          arduino-cli lib install "ArduinoJson"
 
       - name: Generar versión (hash del commit + timestamp)
         id: version
