@@ -7,6 +7,10 @@
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="apple-touch-icon" href="favicon-192x192.png">
     <link rel="manifest" href="manifest.json">
+    <!-- Metatags anti-caché -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <style>
         /* Variables y estilos base sin cambios (se mantienen) */
         :root {
@@ -438,16 +442,32 @@
             try {
                 const res = await fetch(`/cmd?action=${cmd}`);
                 const text = await res.text();
-                if (cmd === 'restart') alert("Reiniciando ESP32...");
-                else if (cmd === 'check_ota') alert("Comprobando actualización...");
-                else if (cmd === 'toggle_sim') {
+                if (cmd === 'restart') {
+                    alert("Reiniciando ESP32...");
+                } else if (cmd === 'check_ota') {
+                    alert("Comprobando actualización...");
+                } else if (cmd === 'toggle_sim') {
                     simulationActive = !simulationActive;
                     addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn');
                 } else if (cmd === 'clear_logs') {
                     document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs limpiados localmente</div>';
-                } else if (cmd === 'update_fw') alert("Iniciando actualización de firmware...");
-                else if (cmd === 'update_html') alert("Iniciando actualización de HTML...");
-            } catch(e) { console.error(e); addSystemLog(`Error al ejecutar ${cmd}`, 'error'); }
+                } else if (cmd === 'update_fw') {
+                    alert("Iniciando actualización de firmware...");
+                } else if (cmd === 'update_html') {
+                    // Forzar recarga de página después de la actualización para evitar caché
+                    if (res.ok) {
+                        alert("HTML actualizado. La página se recargará.");
+                        // Recargar añadiendo un parámetro de versión (timestamp) para evitar caché
+                        const timestamp = Date.now();
+                        window.location.href = window.location.pathname + '?v=' + timestamp;
+                    } else {
+                        alert("Error al actualizar el HTML");
+                    }
+                }
+            } catch(e) {
+                console.error(e);
+                addSystemLog(`Error al ejecutar ${cmd}`, 'error');
+            }
         }
 
         function buildActionBlocks(containerId, actionsList) {
