@@ -1,0 +1,68 @@
+name: Compilar y publicar firmware ESP32
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '*.ino'
+      - '*.h'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Configurar plataforma ESP32
+        run: |
+          arduino-cli core update-index
+          arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Instalar Librerías
+        run: |
+          arduino-cli lib install "DHT sensor library"
+          arduino-cli lib install "Adafruit Unified Sensor"
+          arduino-cli lib install "PubSubClient"
+          arduino-cli lib install "ESP32Servo"
+
+      - name: Generar versión (hash del commit + timestamp)
+        id: version
+        run: |
+          VERSION=$(git rev-parse --short HEAD)-$(date +'%Y%m%d%H%M')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Inyectar versión y compilar
+        run: |
+          # Reemplazar AUTO_VERSION por la versión generada
+          sed -i "s/AUTO_VERSION/${{ steps.version.outputs.version }}/g" fxi-dashboard.ino
+          # Compilar
+          arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir ./build fxi-dashboard.ino
+
+      - name: Renombrar binario
+        run: cp ./build/fxi-dashboard.ino.bin ./firmware.bin
+
+      - name: Crear version.txt
+        run: echo "${{ steps.version.outputs.version }}" > version.txt
+
+      - name: Subir firmware y versión a rama gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./
+          keep_files: false
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: "Actualizar firmware ${{ steps.version.outputs.version }}"
+          # Solo subimos firmware.bin y version.txt
+          pattern: 'firmware.bin version.txt'
