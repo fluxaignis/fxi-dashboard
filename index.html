@@ -96,11 +96,6 @@
             flex-direction: column;
             gap: 25px;
         }
-        .right-wrapper {
-            display: grid;
-            grid-template-columns: 1fr 1.2fr;
-            gap: 20px;
-        }
         .right-small-cards {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -145,38 +140,23 @@
             width: 100%;
             transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .btn-square {
-            background: var(--accent-blue);
-            color: #0B3954;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 50px;
+        /* Estilo unificado para botones tipo "Barrido de Radar" */
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 12px 20px;
+            border-radius: 15px;
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
             text-align: center;
+            width: 100%;
+            font-size: 14px;
         }
-        .btn-reset {
-            background: var(--chart-pink);
-            color: white;
-        }
-        .btn-square:hover { transform: translateY(-2px); }
-        #esp-status {
-            font-size: 10px;
-            padding: 3px 8px;
-            border-radius: 10px;
-            background: var(--chart-green);
-            color: #fff;
-        }
-        @media (max-width: 850px) {
-            .dashboard-grid { grid-template-columns: 1fr; }
-            .right-wrapper { grid-template-columns: 1fr; }
-            .right-small-cards { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 480px) {
-            .right-small-cards { grid-template-columns: 1fr; }
-            .header { flex-direction: column; align-items: flex-start; }
-            #theme-toggle { margin-left: 0; }
+        .btn-glass:hover {
+            background: rgba(122, 240, 212, 0.1);
+            transform: translateY(-2px);
         }
         .btn-servo {
             background: rgba(255,255,255,0.05);
@@ -187,6 +167,7 @@
             cursor: pointer;
             width: 100%;
             transition: all 0.3s;
+            font-weight: 800;
         }
         .btn-servo.active {
             background: var(--accent-cyan);
@@ -266,7 +247,7 @@
         .legend-temp { color: #F06292; }
         .legend-hum { color: #4FC3F7; }
 
-        /* ----- ADMIN PANEL (solo apariencia, sin funciones HTTP) ----- */
+        /* ----- ADMIN PANEL (solo apariencia) ----- */
         .admin-card {
             transition: all 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1);
             cursor: pointer;
@@ -483,6 +464,15 @@
             font-size: 14px;
         }
         .toast.show { opacity: 1; }
+        @media (max-width: 850px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .right-small-cards { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 480px) {
+            .right-small-cards { grid-template-columns: 1fr; }
+            .header { flex-direction: column; align-items: flex-start; }
+            #theme-toggle { margin-left: 0; }
+        }
     </style>
 </head>
 <body>
@@ -501,6 +491,7 @@
         </div>
 
         <div class="dashboard-grid">
+            <!-- Columna izquierda (igual) -->
             <div class="left-column">
                 <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
@@ -544,96 +535,97 @@
                 </div>
             </div>
 
+            <!-- Columna derecha: primero los cuadros pequeños, luego el admin abajo -->
             <div class="right-column">
-                <div class="right-wrapper">
-                    <div class="right-small-cards">
-                        <div class="glass-card flame-card" style="grid-column: span 2; text-align: center;">
-                            <div class="flame-icon normal" id="flameIcon">🔥</div>
-                            <div class="flame-status" id="flameStatus">Estado: Normal</div>
-                            <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
-                        </div>
-                        <div class="glass-card">
-                            <div class="card-title">Humedad</div>
-                            <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
-                        </div>
-                        <div class="glass-card">
-                            <div class="card-title">Señal RSSI</div>
-                            <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
-                        </div>
-                        <div class="glass-card">
-                            <div class="card-title">Estado Red</div>
-                            <div id="net-status" style="color: var(--accent-cyan);">MQTT: Conectando...</div>
-                        </div>
-                        <div class="glass-card">
-                            <div class="card-title">Barrido de Radar</div>
-                            <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
-                        </div>
-                        <div class="glass-card" style="display: flex; align-items: center; justify-content: center; cursor: pointer;" id="reconnectBtn">
-                            <div class="btn-square" style="width: 100%;">🔄 Reconectar Sistema</div>
-                        </div>
-                        <div class="glass-card" style="display: flex; align-items: center; justify-content: center; cursor: pointer;" id="resetAlertBtnSquare">
-                            <div class="btn-square btn-reset" style="width: 100%;">🔄 Resetear Alerta</div>
-                        </div>
+                <div class="right-small-cards">
+                    <div class="glass-card flame-card" style="grid-column: span 2; text-align: center;">
+                        <div class="flame-icon normal" id="flameIcon">🔥</div>
+                        <div class="flame-status" id="flameStatus">Estado: Normal</div>
+                        <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
                     </div>
+                    <div class="glass-card">
+                        <div class="card-title">Humedad</div>
+                        <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Señal RSSI</div>
+                        <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Estado Red</div>
+                        <div id="net-status" style="color: var(--accent-cyan);">MQTT: Conectando...</div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Barrido de Radar</div>
+                        <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
+                    </div>
+                    <!-- Botones con nuevo estilo unificado (glass) -->
+                    <div class="glass-card" style="display: flex; align-items: center; justify-content: center; cursor: pointer;" id="reconnectBtn">
+                        <div class="btn-glass">🔄 Reconectar Sistema</div>
+                    </div>
+                    <div class="glass-card" style="display: flex; align-items: center; justify-content: center; cursor: pointer;" id="resetAlertBtnSquare">
+                        <div class="btn-glass">🔄 Resetear Alerta</div>
+                    </div>
+                </div>
 
-                    <div class="glass-card admin-card" id="adminCard">
-                        <div class="admin-reduced">
-                            <span class="lock-icon">🔐</span>
-                            <span class="admin-title">Panel de Admin</span>
-                            <span class="lock-icon">🔒</span>
+                <!-- Panel de Administración (ahora debajo de los botones) -->
+                <div class="glass-card admin-card" id="adminCard">
+                    <div class="admin-reduced">
+                        <span class="lock-icon">🔐</span>
+                        <span class="admin-title">Panel de Admin</span>
+                        <span class="lock-icon">🔒</span>
+                    </div>
+                    <div class="admin-expanded">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div class="card-title">CENTRO DE ADMINISTRACIÓN</div>
+                            <span id="closeAdmin" style="cursor:pointer; font-size: 24px;">&times;</span>
                         </div>
-                        <div class="admin-expanded">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                <div class="card-title">CENTRO DE ADMINISTRACIÓN</div>
-                                <span id="closeAdmin" style="cursor:pointer; font-size: 24px;">&times;</span>
+                        <div class="admin-section open" id="secStats">
+                            <div class="admin-section-header">
+                                <span class="admin-section-title">📊 Estadísticas del Sistema</span>
+                                <span class="admin-section-icon">▶</span>
                             </div>
-                            <div class="admin-section open" id="secStats">
-                                <div class="admin-section-header">
-                                    <span class="admin-section-title">📊 Estadísticas del Sistema</span>
-                                    <span class="admin-section-icon">▶</span>
+                            <div class="admin-section-content">
+                                <div class="stats-grid">
+                                    <div class="stat-card"><div class="stat-label">Modo</div><div class="stat-value">MQTT</div></div>
+                                    <div class="stat-card"><div class="stat-label">Broker</div><div class="stat-value">HiveMQ Cloud</div></div>
+                                    <div class="stat-card"><div class="stat-label">Datos en tiempo real</div><div class="stat-value">Activo</div></div>
+                                    <div class="stat-card"><div class="stat-label">Alertas</div><div class="stat-value">MQTT</div></div>
                                 </div>
-                                <div class="admin-section-content">
-                                    <div class="stats-grid">
-                                        <div class="stat-card"><div class="stat-label">Modo</div><div class="stat-value">MQTT</div></div>
-                                        <div class="stat-card"><div class="stat-label">Broker</div><div class="stat-value">HiveMQ Cloud</div></div>
-                                        <div class="stat-card"><div class="stat-label">Datos en tiempo real</div><div class="stat-value">Activo</div></div>
-                                        <div class="stat-card"><div class="stat-label">Alertas</div><div class="stat-value">MQTT</div></div>
-                                    </div>
-                                    <div style="font-size: 12px; margin-top: 12px; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 8px; text-align: center;">
-                                        ⚡ Modo MQTT: estadísticas avanzadas no disponibles.<br>
-                                        La interfaz conserva el diseño del Modo AP.
-                                    </div>
+                                <div style="font-size: 12px; margin-top: 12px; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 8px; text-align: center;">
+                                    ⚡ Modo MQTT: estadísticas avanzadas no disponibles.<br>
+                                    La interfaz conserva el diseño del Modo AP.
                                 </div>
                             </div>
-                            <div class="admin-section open" id="secActions">
-                                <div class="admin-section-header">
-                                    <span class="admin-section-title">⚡ Acciones Rápidas</span>
-                                    <span class="admin-section-icon">▶</span>
-                                </div>
-                                <div class="admin-section-content">
-                                    <div class="action-blocks">
-                                        <div class="action-block" id="dummyAction1">
-                                            <span class="action-icon">🔄</span>
-                                            <span class="action-label">Reconectar MQTT</span>
-                                        </div>
-                                        <div class="action-block" id="dummyAction2">
-                                            <span class="action-icon">🔥</span>
-                                            <span class="action-label">Simular fuego</span>
-                                        </div>
-                                    </div>
-                                    <div style="font-size: 11px; text-align: center; margin-top: 10px;">(Funciones solo visuales en modo MQTT)</div>
-                                </div>
+                        </div>
+                        <div class="admin-section open" id="secActions">
+                            <div class="admin-section-header">
+                                <span class="admin-section-title">⚡ Acciones Rápidas</span>
+                                <span class="admin-section-icon">▶</span>
                             </div>
-                            <div class="admin-section open" id="secLogs">
-                                <div class="admin-section-header">
-                                    <span class="admin-section-title">📋 Logs del Sistema</span>
-                                    <span class="admin-section-icon">▶</span>
-                                </div>
-                                <div class="admin-section-content">
-                                    <div class="log-container" id="liveLogs">
-                                        <div class="log-entry log-info">→ Modo MQTT: los logs locales se muestran aquí.</div>
-                                        <div class="log-entry log-info">→ Conexión a broker vía WebSockets.</div>
+                            <div class="admin-section-content">
+                                <div class="action-blocks">
+                                    <div class="action-block" id="dummyAction1">
+                                        <span class="action-icon">🔄</span>
+                                        <span class="action-label">Reconectar MQTT</span>
                                     </div>
+                                    <div class="action-block" id="dummyAction2">
+                                        <span class="action-icon">🔥</span>
+                                        <span class="action-label">Simular fuego</span>
+                                    </div>
+                                </div>
+                                <div style="font-size: 11px; text-align: center; margin-top: 10px;">(Funciones solo visuales en modo MQTT)</div>
+                            </div>
+                        </div>
+                        <div class="admin-section open" id="secLogs">
+                            <div class="admin-section-header">
+                                <span class="admin-section-title">📋 Logs del Sistema</span>
+                                <span class="admin-section-icon">▶</span>
+                            </div>
+                            <div class="admin-section-content">
+                                <div class="log-container" id="liveLogs">
+                                    <div class="log-entry log-info">→ Modo MQTT: los logs locales se muestran aquí.</div>
+                                    <div class="log-entry log-info">→ Conexión a broker vía WebSockets.</div>
                                 </div>
                             </div>
                         </div>
@@ -643,6 +635,7 @@
         </div>
     </div>
 
+    <!-- Modales y Toast -->
     <div id="modal" class="modal">
         <div class="modal-content">
             <h3 id="modalTitle">Acceso restringido</h3>
@@ -657,7 +650,7 @@
     <div id="toast" class="toast">Mensaje</div>
 
     <script>
-        // ==================== SISTEMA DE TOAST Y MODAL (solo apariencia) ====================
+        // ==================== SISTEMA DE TOAST Y MODAL ====================
         function showToast(message, isError = false) {
             const toast = document.getElementById('toast');
             toast.textContent = message;
@@ -801,8 +794,8 @@
             entry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span> ${message}`;
             logDiv.prepend(entry);
             if (logDiv.children.length > 100) logDiv.removeChild(logDiv.lastChild);
-            // opcional: mostrar timestamps si está activado (por defecto no)
-            if (document.querySelector('#toggleTimestampBtn')?.innerText === 'Ocultar timestamps') {
+            const toggleBtn = document.getElementById('toggleTimestampBtn');
+            if (toggleBtn && toggleBtn.innerText === 'Ocultar timestamps') {
                 entry.querySelector('.log-timestamp')?.classList.add('visible');
             }
         }
@@ -1071,13 +1064,13 @@
                 showToast("MQTT no conectado", true);
             }
         });
-        // Timestamps en logs (opcional)
+        // Botón para timestamps en logs
         const toggleTsBtn = document.createElement('button');
         toggleTsBtn.className = 'toggle-timestamp';
         toggleTsBtn.innerText = 'Mostrar timestamps';
+        toggleTsBtn.id = 'toggleTimestampBtn';
         const logContainer = document.querySelector('#secLogs .admin-section-content');
-        if (logContainer && !document.querySelector('#toggleTimestampBtn')) {
-            toggleTsBtn.id = 'toggleTimestampBtn';
+        if (logContainer && !document.getElementById('toggleTimestampBtn')) {
             logContainer.insertBefore(toggleTsBtn, logContainer.firstChild);
             toggleTsBtn.addEventListener('click', () => {
                 const show = toggleTsBtn.innerText === 'Mostrar timestamps';
