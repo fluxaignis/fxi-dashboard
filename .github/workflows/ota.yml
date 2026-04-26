@@ -56,14 +56,11 @@ jobs:
           mkdir -p esp32
           cp data/index.html esp32/
 
-      - name: Subir firmware, versión y HTML a rama gh-pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Desplegar a gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: ./
-          keep_files: false
-          force_orphan: true
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: "Actualizar firmware ${{ steps.vars.outputs.VERSION }}"
+          branch: gh-pages
+          folder: ./
+          clean: true
+          single-commit: true
+          force: true
