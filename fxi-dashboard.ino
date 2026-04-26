@@ -155,6 +155,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 // ==================== MANEJADORES WEB ====================
 void handleRoot() {
+  // Cabeceras para evitar caché del navegador
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.sendHeader("Pragma", "no-cache");
+  server.sendHeader("Expires", "-1");
   File file = LittleFS.open("/index.html", "r");
   if (!file) {
     server.send(500, "text/plain", "Error al cargar la página");
@@ -384,6 +388,13 @@ void chequearActualizacionGitHub() {
     if (httpCode == -1) addLog("error", "Posible fallo de conexión o DNS. Verifica la URL.");
   }
   http.end();
+}
+
+// Función para reiniciar la alerta desde el botón del HTML
+void resetAlertaForzado() {
+  emergenciaActivaPorMQTT = false;
+  if (dangerMode) setDangerMode(false, "");
+  addLog("info", "Alerta reiniciada manualmente desde el panel.");
 }
 
 // ==================== SETUP ====================
