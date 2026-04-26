@@ -13,7 +13,7 @@
 #include <HTTPUpdate.h>
 
 // --- CONFIGURACIÓN DE GITHUB OTA ---
-String FIRMWARE_VERSION = "AUTO_VERSION";
+String FIRMWARE_VERSION = "AUTO_VERSION"; // Se sobrescribirá al leer de LittleFS
 const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/version.txt";
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/firmware.bin";
 
@@ -62,7 +62,7 @@ unsigned long cronometroRSSI = 0;
 unsigned long ultimoTiempoDHT = 0;
 bool simularFuego = false;
 
-// --- CREDENCIALES (para WiFi externo) ---
+// --- CREDENCIALES ---
 const char* ssid = "NauticaNet";
 const char* password = "PromoXXX.2026";
 const char* mqtt_server = "df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud";
@@ -71,7 +71,7 @@ const long gmtOffset_sec = -14400;
 const int daylightOffset_sec = 0;
 
 // --- Configuración del punto de acceso (hotspot) ---
-const char* ap_ssid = "FXI-TECH";
+const char* ap_ssid = "FLUXA IGNIS";
 const char* ap_password = "";
 IPAddress apIP(192, 168, 1, 1);
 IPAddress apGateway(192, 168, 1, 1);
@@ -160,6 +160,32 @@ void handleNotFound() {
   server.send(200, "text/html", "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0;url=http://192.168.1.1/'></head><body></body></html>");
 }
 
+// --- Funciones para guardar/leer versión en LittleFS ---
+void guardarVersion(String version) {
+  File f = LittleFS.open("/version.txt", "w");
+  if (f) {
+    f.print(version);
+    f.close();
+    Serial.println("Versión guardada en LittleFS: " + version);
+  } else {
+    Serial.println("Error al guardar versión");
+  }
+}
+
+String leerVersion() {
+  File f = LittleFS.open("/version.txt", "r");
+  if (!f) {
+    Serial.println("No se encontró version.txt, se usará AUTO_VERSION");
+    return "AUTO_VERSION";
+  }
+  String v = f.readString();
+  v.trim();
+  f.close();
+  Serial.println("Versión leída de LittleFS: " + v);
+  return v;
+}
+
+// --- ACTUALIZACIÓN OTA GITHUB (modificada) ---
 void chequearActualizacionGitHub() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Sin conexión WiFi externa. Se omite chequeo OTA de GitHub.");
@@ -176,10 +202,12 @@ void chequearActualizacionGitHub() {
     String versionGitHub = http.getString();
     versionGitHub.trim();
 
-    Serial.println("Versión actual en ESP32: " + FIRMWARE_VERSION);
+    // Leer la versión actual guardada en LittleFS
+    String currentVersion = leerVersion();
+    Serial.println("Versión actual guardada: " + currentVersion);
     Serial.println("Versión detectada en GitHub: " + versionGitHub);
 
-    if (versionGitHub != FIRMWARE_VERSION && versionGitHub.length() > 0) {
+    if (versionGitHub != currentVersion && versionGitHub.length() > 0) {
       Serial.println("¡Nueva versión detectada! Iniciando descarga e instalación OTA...");
       httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
       t_httpUpdate_return ret = httpUpdate.update(espClient, urlFirmware);
@@ -192,7 +220,9 @@ void chequearActualizacionGitHub() {
           Serial.println("No hay actualizaciones disponibles (HTTP_UPDATE_NO_UPDATES).");
           break;
         case HTTP_UPDATE_OK:
-          Serial.println("¡Actualización completada! El ESP32 se reiniciará ahora.");
+          // Guardar la nueva versión antes de reiniciar
+          guardarVersion(versionGitHub);
+          Serial.println("¡Actualización completada! Versión guardada. Reiniciando...");
           ESP.restart();
           break;
       }
@@ -205,7 +235,7 @@ void chequearActualizacionGitHub() {
   http.end();
 }
 
-// --- CONFIGURACIÓN INICIAL ---
+// --- CONFIGURACIÓN INICIAL (modificada) ---
 void setup() {
   Serial.begin(115200);
   dht.begin();
@@ -234,7 +264,9 @@ void setup() {
     file = root.openNextFile();
   }
 
-  Serial.print("Firmware version: ");
+  // Leer la versión guardada desde LittleFS
+  FIRMWARE_VERSION = leerVersion();
+  Serial.print("Firmware version actual: ");
   Serial.println(FIRMWARE_VERSION);
 
   // ========== 1. Configurar punto de acceso (AP) ==========
