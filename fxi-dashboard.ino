@@ -14,9 +14,8 @@
 
 // --- CONFIGURACIÓN DE GITHUB OTA ---
 String FIRMWARE_VERSION = "AUTO_VERSION"; // Se sobrescribirá al leer de LittleFS
-const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/version.txt";
-const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/firmware.bin";
-
+const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/version.txt";
+const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/firmware.bin";
 unsigned long ultimoChequeoOTA = 0;
 const unsigned long INTERVALO_OTA = 60000; // 1 minuto para pruebas
 
