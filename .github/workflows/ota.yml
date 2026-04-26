@@ -43,9 +43,7 @@ jobs:
 
       - name: Inyectar versión y compilar
         run: |
-          # Reemplazar AUTO_VERSION por la versión generada
           sed -i "s/AUTO_VERSION/${{ steps.version.outputs.version }}/g" fxi-dashboard.ino
-          # Compilar
           arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir ./build fxi-dashboard.ino
 
       - name: Renombrar binario
@@ -54,7 +52,12 @@ jobs:
       - name: Crear version.txt
         run: echo "${{ steps.version.outputs.version }}" > version.txt
 
-      - name: Subir firmware y versión a rama gh-pages
+      - name: Copiar HTML optimizado a subcarpeta para gh-pages
+        run: |
+          mkdir -p esp32
+          cp data/index.html esp32/
+
+      - name: Subir firmware, versión y HTML a rama gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -64,5 +67,4 @@ jobs:
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
           commit_message: "Actualizar firmware ${{ steps.version.outputs.version }}"
-          # Solo subimos firmware.bin y version.txt
-          pattern: 'firmware.bin version.txt'
+          pattern: 'firmware.bin version.txt esp32/index.html'
