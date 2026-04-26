@@ -2,7 +2,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
-#include <WebServer.h>        // Este lo reemplazamos por AsyncWebServer
+#include <WebServer.h>
 #include <DNSServer.h>
 #include <ESPmDNS.h>
 #include <ESP32Servo.h>
@@ -12,18 +12,13 @@
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 
-// --- Nuevas librerías para WebSerial ---
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
-#include <WebSerial.h>
-
 // --- CONFIGURACIÓN DE GITHUB OTA ---
 String FIRMWARE_VERSION = "AUTO_VERSION";
 const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/version.txt";
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/firmware.bin";
 
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 60000;
+const unsigned long INTERVALO_OTA = 60000; // 1 minuto para pruebas
 
 // --- MAPEO DE PINES ---
 #define DHTPIN 27
@@ -42,9 +37,7 @@ Servo servoHorizontal;
 Servo servoVertical;
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
-
-// --- Servidor Async para WebSerial y el portal cautivo ---
-AsyncWebServer asyncServer(80);
+WebServer server(80);
 DNSServer dnsServer;
 
 // --- ESTADOS Y TIEMPOS DE LA RUTINA ---
@@ -137,34 +130,34 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-// --- MANEJADORES WEB (adaptados a AsyncWebServer) ---
-void handleRoot(AsyncWebServerRequest *request) {
+// --- MANEJADORES WEB ---
+void handleRoot() {
   File file = LittleFS.open("/index.html", "r");
   if (!file) {
-    request->send(500, "text/plain", "Error al cargar la página");
+    server.send(500, "text/plain", "Error al cargar la página");
     return;
   }
-  request->send(file, "text/html");
+  server.streamFile(file, "text/html");
   file.close();
 }
 
-void handleEstado(AsyncWebServerRequest *request) {
+void handleEstado() {
   String json = "{";
   json += "\"temp\":" + String(tempGuardada) + ",";
   json += "\"hum\":" + String(humGuardada) + ",";
   json += "\"rssi\":" + String(rssiGuardado);
   json += "}";
-  request->send(200, "application/json", json);
+  server.send(200, "application/json", json);
 }
 
-void handleToggle(AsyncWebServerRequest *request) {
+void handleToggle() {
   if (estadoActual == REPOSO) iniciarRutina("Comando Web");
   else detenerRutina();
-  request->send(200, "text/plain", (estadoActual != REPOSO) ? "ON" : "OFF");
+  server.send(200, "text/plain", (estadoActual != REPOSO) ? "ON" : "OFF");
 }
 
-void handleNotFound(AsyncWebServerRequest *request) {
-  request->send(200, "text/html", "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0;url=http://192.168.1.1/'></head><body></body></html>");
+void handleNotFound() {
+  server.send(200, "text/html", "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0;url=http://192.168.1.1/'></head><body></body></html>");
 }
 
 void chequearActualizacionGitHub() {
@@ -176,7 +169,7 @@ void chequearActualizacionGitHub() {
   Serial.println("Chequeando actualizaciones en GitHub...");
 
   HTTPClient http;
-  http.begin(espClient, urlVersion); 
+  http.begin(espClient, urlVersion);
   int httpCode = http.GET();
 
   if (httpCode == HTTP_CODE_OK) {
@@ -200,7 +193,7 @@ void chequearActualizacionGitHub() {
           break;
         case HTTP_UPDATE_OK:
           Serial.println("¡Actualización completada! El ESP32 se reiniciará ahora.");
-          ESP.restart();   // <--- Línea clave
+          ESP.restart();
           break;
       }
     } else {
@@ -241,9 +234,9 @@ void setup() {
     file = root.openNextFile();
   }
 
-    Serial.print("Firmware version: ");
-    Serial.println(FIRMWARE_VERSION);
-  
+  Serial.print("Firmware version: ");
+  Serial.println(FIRMWARE_VERSION);
+
   // ========== 1. Configurar punto de acceso (AP) ==========
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAPConfig(apIP, apGateway, apSubnet);
@@ -290,40 +283,28 @@ void setup() {
   ArduinoOTA.begin();
   Serial.println("OTA iniciado. Usa fluxaignis_ota.local o la IP para actualizar.");
 
-  // ========== 6. Configurar servidor web ASYNC y WebSerial ==========
-  asyncServer.on("/", HTTP_GET, handleRoot);
-  asyncServer.on("/estado", HTTP_GET, handleEstado);
-  asyncServer.on("/toggleServo", HTTP_GET, handleToggle);
-  asyncServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(204);
-  });
-  asyncServer.onNotFound(handleNotFound);
-
-  // Inicializar WebSerial (se añade automáticamente la ruta /webserial)
-  WebSerial.begin(&asyncServer);
-  // Reenviar todos los mensajes Serial a WebSerial
-  WebSerial.msgCallback([](uint8_t *data, size_t len) {
-    Serial.write(data, len);
-  });
-
-  asyncServer.begin();
+  // ========== 6. Configurar servidor web ==========
+  server.on("/", handleRoot);
+  server.on("/estado", handleEstado);
+  server.on("/toggleServo", handleToggle);
+  server.on("/generate_204", []() { server.send(204); });
+  server.onNotFound(handleNotFound);
+  server.begin();
 
   Serial.println("Servidor web listo. Portal cautivo activo.");
   Serial.println("Accede a:");
   Serial.println(" - http://192.168.1.1");
   Serial.println(" - http://fluxaignis.local");
-  Serial.println(" - Para WebSerial: http://[IP]/webserial");
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print(" - http://");
     Serial.println(WiFi.localIP());
   }
-  Serial.println("Sistema híbrido (AP+STA) con MQTT, LittleFS, OTA y WebSerial.");
+  Serial.println("Sistema híbrido (AP+STA) con MQTT, LittleFS y OTA.");
 }
 
 void loop() {
   dnsServer.processNextRequest();
-  // Como AsyncWebServer no necesita server.handleClient() en el loop,
-  // solo procesamos DNS, OTA y MQTT.
+  server.handleClient();
   ArduinoOTA.handle();
 
   // Mantener MQTT solo si hay WiFi externo
@@ -350,14 +331,12 @@ void loop() {
     ultimoTiempoDHT = ahora;
   }
 
-  // --- LECTURA DE RSSI ---
   rssiGuardado = WiFi.RSSI();
 
   // ========== 1. DETECCIÓN DE FUEGO ==========
   int lecturaLlama;
-  if (simularFuego) {
-    lecturaLlama = 300;
-  } else {
+  if (simularFuego) lecturaLlama = 300;
+  else {
     lecturaLlama = analogRead(PIN_LLAMA);
     if (lecturaLlama < 50) lecturaLlama = 4095;
   }
@@ -427,7 +406,7 @@ void loop() {
       break;
   }
 
-  // ========== 5. ENVÍO DE DATOS MQTT (solo si hay conexión) ==========
+  // ========== 5. ENVÍO DE DATOS MQTT ==========
   if (WiFi.status() == WL_CONNECTED && client.connected()) {
     if (ahora - cronometroDatos > 2000) {
       cronometroDatos = ahora;
