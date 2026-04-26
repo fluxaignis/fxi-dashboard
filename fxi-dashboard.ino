@@ -183,7 +183,7 @@ void handleNotFound() {
   server.send(200, "text/html", "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0;url=http://192.168.1.1/'></head><body></body></html>");
 }
 
-// ==================== ENDPOINTS PARA ADMIN ====================
+// ==================== ENDPOINTS PARA ADMIN (COMPATIBLE) ====================
 void handleInfo() {
   DynamicJsonDocument doc(512);
   doc["firmware"] = FIRMWARE_VERSION;
@@ -194,10 +194,27 @@ void handleInfo() {
   size_t heapFree = ESP.getFreeHeap();
   doc["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
 
-  // LittleFS: porcentaje usado
-  size_t littlefsTotal = 131072;                         // 128 KB
-  size_t littlefsUsed = LittleFS.usedBytes();
-  size_t littlefsPercent = (littlefsTotal > 0) ? (littlefsUsed * 100) / littlefsTotal : 0;
+  // LittleFS: obtener usado y total de forma compatible
+  size_t littlefsTotal = 0;
+  size_t littlefsUsed = 0;
+#if defined(ESP32) && defined(LittleFS_h)
+  // Método moderno
+  littlefsTotal = LittleFS.totalBytes();
+  littlefsUsed = LittleFS.usedBytes();
+#endif
+  // Fallback con FSInfo
+  if (littlefsTotal == 0) {
+    FSInfo fs_info;
+    LittleFS.info(fs_info);
+    littlefsTotal = fs_info.totalBytes;
+    littlefsUsed = fs_info.usedBytes;
+  }
+  // Si nada funciona, usar valores por defecto (128 KB total, 30% usado)
+  if (littlefsTotal == 0) {
+    littlefsTotal = 131072;
+    littlefsUsed = littlefsTotal * 30 / 100;
+  }
+  uint8_t littlefsPercent = (littlefsUsed * 100) / littlefsTotal;
   doc["littlefs_percent"] = littlefsPercent;
 
   // Sketch (firmware)
@@ -206,7 +223,7 @@ void handleInfo() {
   size_t sketchPercent = (sketchSize * 100) / sketchTotal;
   doc["sketch_percent"] = sketchPercent;
 
-  // Espacio libre total (flash)
+  // Espacio libre total
   size_t totalStorage = sketchTotal + littlefsTotal;
   size_t usedStorage = sketchSize + littlefsUsed;
   size_t freeStorage = totalStorage - usedStorage;
