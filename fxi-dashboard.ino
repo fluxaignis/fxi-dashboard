@@ -94,7 +94,7 @@ const long gmtOffset_sec = -14400;
 const int daylightOffset_sec = 0;
 
 // ==================== CONFIGURACIÓN DEL PUNTO DE ACCESO ====================
-const char* ap_ssid = "FLUXAIGNIS TECH";
+const char* ap_ssid = "FluxaIgnis TECH";
 const char* ap_password = "";
 IPAddress apIP(192, 168, 1, 1);
 IPAddress apGateway(192, 168, 1, 1);
@@ -159,7 +159,6 @@ void processAdminCommand(int id, const String &action) {
     size_t heapTotal = ESP.getHeapSize();
     size_t heapFree = ESP.getFreeHeap();
     data["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
-    // LittleFS (datos estáticos de ejemplo)
     data["littlefs_percent"] = 30;
     size_t sketchSize = ESP.getSketchSize();
     size_t sketchTotal = 1992294;
@@ -213,8 +212,14 @@ void processAdminCommand(int id, const String &action) {
     respondAdminCommand(id, true, empty);
     addLog("info", "Logs limpiados por comando MQTT admin");
   }
+  else if (action == "ping") {
+    DynamicJsonDocument data(32);
+    data["pong"] = true;
+    respondAdminCommand(id, true, data);
+  }
   else {
-    respondAdminCommand(id, false, DynamicJsonDocument(64), "Unknown action: " + action);
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, false, empty, "Unknown action: " + action);
   }
 }
 
