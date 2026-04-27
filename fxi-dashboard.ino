@@ -398,7 +398,7 @@ String leerVersion() {
 
 bool actualizarHTML() {
   if (WiFi.status() != WL_CONNECTED) return false;
-  addLog("info", "Descargando nueva versión del HTML...");
+  addLog("info", "Descargando nueva versión del HTML (forzada)...");
   HTTPClient http;
   http.setTimeout(10000);
   http.begin(espClient, urlHTML);
@@ -414,26 +414,16 @@ bool actualizarHTML() {
     addLog("error", "HTML descargado demasiado pequeño, ignorando");
     return false;
   }
-  File f = LittleFS.open("/index.html", "r");
-  if (f) {
-    String actualHTML = f.readString();
-    f.close();
-    if (actualHTML == nuevoHTML) {
-      addLog("info", "HTML ya está actualizado");
-      return false;
-    }
-  }
-  f = LittleFS.open("/index.html", "w");
+  File f = LittleFS.open("/index.html", "w");
   if (!f) {
     addLog("error", "Error al guardar HTML");
     return false;
   }
   f.print(nuevoHTML);
   f.close();
-  addLog("info", "HTML actualizado correctamente");
+  addLog("info", "HTML actualizado correctamente (forzado)");
   return true;
 }
-
 bool isNewerVersion(String remote, String current) {
   remote.replace("v", "");
   current.replace("v", "");
