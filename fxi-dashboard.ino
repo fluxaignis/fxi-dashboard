@@ -133,16 +133,104 @@ void detenerRutina() {
   addLog("info", "Rutina detenida.");
 }
 
-// ==================== CALLBACK MQTT ====================
+// ==================== NUEVO MQTT ADMIN: MANEJADOR DE COMANDOS ====================
+void respondAdminCommand(int id, bool success, JsonDocument &data, const String &errorMsg = "") {
+  if (!client.connected()) return;
+  DynamicJsonDocument resp(1024);
+  resp["id"] = id;
+  resp["success"] = success;
+  if (success) {
+    resp["data"] = data;
+  } else {
+    resp["error"] = errorMsg;
+  }
+  String out;
+  serializeJson(resp, out);
+  client.publish("fxi/admin/resp", out.c_str());
+}
+
+void processAdminCommand(int id, const String &action) {
+  addLog("info", "Comando MQTT admin: " + action + " (id=" + String(id) + ")");
+
+  if (action == "get_stats") {
+    DynamicJsonDocument data(512);
+    data["firmware"] = FIRMWARE_VERSION;
+    data["uptime"] = millis() / 1000;
+    size_t heapTotal = ESP.getHeapSize();
+    size_t heapFree = ESP.getFreeHeap();
+    data["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
+    // LittleFS (datos estáticos de ejemplo)
+    data["littlefs_percent"] = 30;
+    size_t sketchSize = ESP.getSketchSize();
+    size_t sketchTotal = 1992294;
+    data["sketch_percent"] = (sketchSize * 100) / sketchTotal;
+    data["ip_ap"] = WiFi.softAPIP().toString();
+    data["ip_sta"] = WiFi.localIP().toString();
+    data["mqtt_status"] = client.connected() ? "conectado" : "desconectado";
+    data["mdns"] = "fluxaignis.local";
+    respondAdminCommand(id, true, data);
+  }
+  else if (action == "get_logs") {
+    DynamicJsonDocument data(2048);
+    JsonArray logs = data.createNestedArray("logs");
+    int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
+    for (int i = 0; i < logCount; i++) {
+      int idx = (start + i) % MAX_LOGS;
+      JsonObject entry = logs.createNestedObject();
+      entry["timestamp"] = logBuffer[idx].timestamp;
+      entry["level"] = logBuffer[idx].level;
+      entry["message"] = logBuffer[idx].message;
+    }
+    respondAdminCommand(id, true, data);
+  }
+  else if (action == "restart") {
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, true, empty);
+    delay(100);
+    ESP.restart();
+  }
+  else if (action == "update_fw") {
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, true, empty);
+    chequearActualizacionGitHub();
+  }
+  else if (action == "update_html") {
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, true, empty);
+    actualizarHTML();
+  }
+  else if (action == "toggle_sim") {
+    simularFuego = !simularFuego;
+    DynamicJsonDocument data(32);
+    data["simulating"] = simularFuego;
+    respondAdminCommand(id, true, data);
+    addLog("warn", simularFuego ? "Simulación de fuego ACTIVADA por MQTT admin" : "Simulación DESACTIVADA por MQTT admin");
+  }
+  else if (action == "clear_logs") {
+    logIndex = 0;
+    logCount = 0;
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, true, empty);
+    addLog("info", "Logs limpiados por comando MQTT admin");
+  }
+  else {
+    respondAdminCommand(id, false, DynamicJsonDocument(64), "Unknown action: " + action);
+  }
+}
+
+// ==================== CALLBACK MQTT (ampliado) ====================
 void callback(char* topic, byte* payload, unsigned int length) {
   String msg = "";
   for (int i = 0; i < length; i++) msg += (char)payload[i];
-  if (String(topic) == "fxi/comandos") {
+  String topicStr = String(topic);
+
+  if (topicStr == "fxi/comandos") {
     if (msg == "TOGGLE") {
       if (estadoActual == REPOSO) iniciarRutina("Comando Manual MQTT");
       else detenerRutina();
     }
-  } else if (String(topic) == "fxi/simular") {
+  } 
+  else if (topicStr == "fxi/simular") {
     if (msg == "FUEGO_ON") {
       simularFuego = true;
       addLog("warn", "Simulación ACTIVADA");
@@ -151,9 +239,25 @@ void callback(char* topic, byte* payload, unsigned int length) {
       addLog("info", "Simulación DESACTIVADA");
     }
   }
+  // === NUEVO: comandos de administración MQTT ===
+  else if (topicStr == "fxi/admin/cmd") {
+    DynamicJsonDocument doc(256);
+    DeserializationError error = deserializeJson(doc, msg);
+    if (error) {
+      addLog("error", "Error al parsear comando admin: " + String(error.c_str()));
+      return;
+    }
+    int id = doc["id"] | 0;
+    String action = doc["action"] | "";
+    if (action.length() == 0) {
+      addLog("warn", "Comando admin sin acción");
+      return;
+    }
+    processAdminCommand(id, action);
+  }
 }
 
-// ==================== MANEJADORES WEB ====================
+// ==================== MANEJADORES WEB (sin cambios) ====================
 void handleRoot() {
   File file = LittleFS.open("/index.html", "r");
   if (!file) {
@@ -183,40 +287,29 @@ void handleNotFound() {
   server.send(200, "text/html", "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0;url=http://192.168.1.1/'></head><body></body></html>");
 }
 
-// ==================== ENDPOINTS PARA ADMIN (COMPATIBLE) ====================
 void handleInfo() {
   DynamicJsonDocument doc(512);
   doc["firmware"] = FIRMWARE_VERSION;
   doc["uptime"] = millis() / 1000;
-
-  // RAM
   size_t heapTotal = ESP.getHeapSize();
   size_t heapFree = ESP.getFreeHeap();
   doc["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
-
-  // LittleFS: valores por defecto (128KB, 30% usado)
-  const size_t littlefsTotal = 131072; // 128 KB
-  const size_t littlefsUsed = littlefsTotal * 30 / 100; // 30% ejemplo
+  const size_t littlefsTotal = 131072;
+  const size_t littlefsUsed = littlefsTotal * 30 / 100;
   uint8_t littlefsPercent = 30;
   doc["littlefs_percent"] = littlefsPercent;
-
-  // Sketch (firmware)
   size_t sketchSize = ESP.getSketchSize();
-  size_t sketchTotal = 1992294; // 1.9 MB (Minimal SPIFFS)
+  size_t sketchTotal = 1992294;
   size_t sketchPercent = (sketchSize * 100) / sketchTotal;
   doc["sketch_percent"] = sketchPercent;
-
-  // Espacio libre total (flash)
   size_t totalStorage = sketchTotal + littlefsTotal;
   size_t usedStorage = sketchSize + littlefsUsed;
   size_t freeStorage = totalStorage - usedStorage;
   doc["free_percent"] = (freeStorage * 100) / totalStorage;
-
   doc["ip_ap"] = WiFi.softAPIP().toString();
   doc["ip_sta"] = WiFi.localIP().toString();
   doc["mqtt_status"] = client.connected() ? "conectado" : "desconectado";
   doc["mdns"] = "fluxaignis.local";
-
   String json;
   serializeJson(doc, json);
   server.send(200, "application/json", json);
@@ -244,7 +337,7 @@ void handleCmd() {
     return;
   }
   String action = server.arg("action");
-  addLog("info", "Comando recibido: " + action);
+  addLog("info", "Comando HTTP recibido: " + action);
 
   if (action == "restart") {
     server.send(200, "text/plain", "OK");
@@ -273,7 +366,7 @@ void handleCmd() {
   }
 }
 
-// ==================== ACTUALIZACIONES (OTA y HTML) ====================
+// ==================== ACTUALIZACIONES (OTA y HTML) - sin cambios ====================
 void guardarVersion(String version) {
   File f = LittleFS.open("/version.txt", "w");
   if (f) {
@@ -300,28 +393,22 @@ String leerVersion() {
 
 bool actualizarHTML() {
   if (WiFi.status() != WL_CONNECTED) return false;
-
   addLog("info", "Descargando nueva versión del HTML...");
   HTTPClient http;
   http.setTimeout(10000);
   http.begin(espClient, urlHTML);
   int httpCode = http.GET();
-
   if (httpCode != HTTP_CODE_OK) {
     addLog("error", "Error al descargar HTML: " + String(httpCode));
     http.end();
     return false;
   }
-
   String nuevoHTML = http.getString();
   http.end();
-
   if (nuevoHTML.length() < 100) {
     addLog("error", "HTML descargado demasiado pequeño, ignorando");
     return false;
   }
-
-  // Comparar con el actual
   File f = LittleFS.open("/index.html", "r");
   if (f) {
     String actualHTML = f.readString();
@@ -331,8 +418,6 @@ bool actualizarHTML() {
       return false;
     }
   }
-
-  // Guardar nuevo HTML
   f = LittleFS.open("/index.html", "w");
   if (!f) {
     addLog("error", "Error al guardar HTML");
@@ -344,14 +429,13 @@ bool actualizarHTML() {
   return true;
 }
 
-// Función para comparar versiones semánticas (formato x.y.z)
 bool isNewerVersion(String remote, String current) {
   remote.replace("v", "");
   current.replace("v", "");
   int rMajor, rMinor, rPatch;
   int cMajor, cMinor, cPatch;
   if (sscanf(remote.c_str(), "%d.%d.%d", &rMajor, &rMinor, &rPatch) != 3) return false;
-  if (sscanf(current.c_str(), "%d.%d.%d", &cMajor, &cMinor, &cPatch) != 3) return true; // asumir que remota es nueva si la local es inválida
+  if (sscanf(current.c_str(), "%d.%d.%d", &cMajor, &cMinor, &cPatch) != 3) return true;
   if (rMajor > cMajor) return true;
   if (rMajor < cMajor) return false;
   if (rMinor > cMinor) return true;
@@ -364,26 +448,20 @@ void chequearActualizacionGitHub() {
     addLog("warn", "Sin conexión WiFi externa. Se omite chequeo OTA de GitHub.");
     return;
   }
-
   addLog("info", "Chequeando actualizaciones en GitHub...");
-
   HTTPClient http;
   http.setTimeout(10000);
   http.begin(espClient, urlVersion);
   int httpCode = http.GET();
-
   if (httpCode == HTTP_CODE_OK) {
     String versionGitHub = http.getString();
     versionGitHub.trim();
-
     String currentVersion = leerVersion();
     addLog("info", "Versión actual: " + currentVersion + " | GitHub: " + versionGitHub);
-
     if (isNewerVersion(versionGitHub, currentVersion) && versionGitHub.length() > 0) {
       addLog("info", "¡Nueva versión detectada! Iniciando OTA...");
       httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
       t_httpUpdate_return ret = httpUpdate.update(espClient, urlFirmware);
-
       switch (ret) {
         case HTTP_UPDATE_FAILED:
           addLog("error", "Error en OTA: " + String(httpUpdate.getLastError()));
@@ -418,14 +496,12 @@ void setup() {
   pinMode(PIN_ROJO, OUTPUT); pinMode(PIN_VERDE, OUTPUT); pinMode(PIN_AZUL, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT); noTone(PIN_BUZZER);
 
-  // Servos
   ESP32PWM::allocateTimer(0); ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2); ESP32PWM::allocateTimer(3);
   servoHorizontal.setPeriodHertz(50); servoHorizontal.attach(PIN_SERVO_H, 500, 2400);
   servoVertical.setPeriodHertz(50); servoVertical.attach(PIN_SERVO_V, 500, 2400);
   servoHorizontal.write(SERVO_H_NEUTRAL); servoVertical.write(20);
 
-  // LittleFS
   if (!LittleFS.begin()) {
     Serial.println("Error al montar LittleFS");
     addLog("error", "Error al montar LittleFS");
@@ -435,17 +511,14 @@ void setup() {
   FIRMWARE_VERSION = leerVersion();
   addLog("info", "Firmware version: " + FIRMWARE_VERSION);
 
-  // Hotspot (AP)
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAPConfig(apIP, apGateway, apSubnet);
   WiFi.softAP(ap_ssid, ap_password);
   addLog("info", "Hotspot creado: " + String(ap_ssid) + " - IP: " + WiFi.softAPIP().toString());
 
-  // DNS captive portal
   dnsServer.start(53, "*", apIP);
   addLog("info", "DNS Captive Portal activado");
 
-  // Configuración mDNS (sin .update en el loop)
   if (MDNS.begin("fluxaignis")) {
     addLog("info", "✅ mDNS iniciado correctamente como fluxaignis.local");
     MDNS.addService("http", "tcp", 80);
@@ -456,7 +529,6 @@ void setup() {
     addLog("error", "❌ Error al iniciar mDNS");
   }
 
-  // WiFi externo
   WiFi.begin(ssid, password);
   int intentos = 0;
   while (WiFi.status() != WL_CONNECTED && intentos < 20) {
@@ -470,20 +542,16 @@ void setup() {
     espClient.setInsecure();
     client.setServer(mqtt_server, 8883);
     client.setCallback(callback);
-
-    // COMPROBAR ACTUALIZACIÓN NADA MÁS CONECTARSE
     chequearActualizacionGitHub();
   } else {
     addLog("warn", "No se pudo conectar a red externa. Modo offline + hotspot.");
   }
 
-  // ArduinoOTA (clásico)
   ArduinoOTA.setHostname("fluxaignis_ota");
   ArduinoOTA.setPassword("12345678");
   ArduinoOTA.begin();
   addLog("info", "OTA clásico iniciado (hostname: fluxaignis_ota).");
 
-  // Servidor web
   server.on("/", handleRoot);
   server.on("/estado", handleEstado);
   server.on("/toggleServo", handleToggle);
@@ -496,10 +564,8 @@ void setup() {
 
   addLog("info", "Servidor web listo. Accede a http://192.168.1.1 o http://fluxaignis.local");
 
-  // Inicializar el temporizador para OTA periódico
   ultimoChequeoOTA = millis();
 
-  // --- Mostrar ayuda por Serial ---
   Serial.println("\n=== Comandos disponibles por Serial ===");
   Serial.println("  help      - Muestra esta ayuda");
   Serial.println("  update_fw - Forzar actualización OTA del firmware (código)");
@@ -516,10 +582,6 @@ void loop() {
   server.handleClient();
   ArduinoOTA.handle();
 
-  // NOTA: No usamos MDNS.update() porque en esta versión de ESPmDNS no existe.
-  // El servicio mDNS se mantiene automáticamente.
-
-  // ---- PROCESAR COMANDOS POR SERIAL ----
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
@@ -544,13 +606,13 @@ void loop() {
     }
   }
 
-  // MQTT
   if (WiFi.status() == WL_CONNECTED) {
     if (!client.connected()) {
       if (client.connect("ESP32_FXI", "Admin", "FluxaIgnis2026")) {
         client.subscribe("fxi/comandos");
         client.subscribe("fxi/simular");
-        addLog("info", "MQTT conectado");
+        client.subscribe("fxi/admin/cmd");  // suscripción al topic de administración
+        addLog("info", "MQTT conectado (incluyendo admin)");
       }
     } else {
       client.loop();
@@ -559,7 +621,6 @@ void loop() {
 
   unsigned long ahora = millis();
 
-  // DHT11 cada 2 segundos
   if (ahora - ultimoTiempoDHT >= 2000) {
     float t = dht.readTemperature();
     float h = dht.readHumidity();
@@ -570,7 +631,6 @@ void loop() {
 
   rssiGuardado = WiFi.RSSI();
 
-  // Detección de fuego
   int lecturaLlama = (simularFuego) ? 300 : analogRead(PIN_LLAMA);
   if (lecturaLlama < 50) lecturaLlama = 4095;
   if (estadoActual == REPOSO && lecturaLlama < UMBRAL_FUEGO) {
@@ -582,7 +642,6 @@ void loop() {
     }
   }
 
-  // Temperatura crítica
   if (tempGuardada >= TEMP_CRITICA) {
     if (!emergenciaEnviada) {
       enviarNotificacionMQTT("CALOR CRITICO", tempGuardada);
@@ -593,7 +652,6 @@ void loop() {
     emergenciaEnviada = false;
   }
 
-  // LEDs y buzzer
   if (estadoActual != REPOSO) {
     setColor(255, 0, 0);
     if ((ahora / 300) % 2 == 0) tone(PIN_BUZZER, 2000);
@@ -606,7 +664,6 @@ void loop() {
     setColor(r, g, b);
   }
 
-  // Máquina de estados del servo
   switch (estadoActual) {
     case REPOSO: break;
     case ESPERANDO_AGUA:
@@ -640,7 +697,6 @@ void loop() {
       break;
   }
 
-  // Envío de datos MQTT
   if (WiFi.status() == WL_CONNECTED && client.connected()) {
     if (ahora - cronometroDatos > 2000) {
       cronometroDatos = ahora;
@@ -655,13 +711,11 @@ void loop() {
     }
   }
 
-  // Chequeo periódico de OTA (cada INTERVALO_OTA)
   if (ahora - ultimoChequeoOTA >= INTERVALO_OTA) {
     ultimoChequeoOTA = ahora;
     chequearActualizacionGitHub();
   }
 
-  // Actualización periódica del HTML (cada 24h)
   static unsigned long ultimaActualizacionHTML = 0;
   if (ahora - ultimaActualizacionHTML >= 86400000UL) {
     if (WiFi.status() == WL_CONNECTED) {
