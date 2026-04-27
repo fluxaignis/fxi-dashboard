@@ -1000,7 +1000,8 @@
                 const uptime = info.uptime || 0;
                 const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
                 const totalKB = 1992 + 128;
-                const mdnsHost = info.mdns || 'fluxaignis.local';
+                // Mostrar el nombre real del mDNS enviado por el ESP32, o un valor por defecto
+                const mdnsHost = info.mdns || 'fluxaignis_ota.local';
                 document.getElementById('statsGrid').innerHTML = `
                     <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${info.firmware || '--'}</div></div>
                     <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
@@ -1226,7 +1227,7 @@
         // Arranque
         fetchEstado();
         setInterval(fetchEstado, 2000);
-        addSystemLog("🚀 Panel Modo AP cargado - Colores de flash corregidos (libre en gris oscuro) + mDNS", 'info');
+        addSystemLog("🚀 Panel Modo AP cargado - mDNS dinámico desde el ESP32", 'info');
     </script>
 </body>
 </html>
