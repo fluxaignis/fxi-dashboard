@@ -431,7 +431,7 @@ void setup() {
   addLog("info", "DNS Captive Portal activado");
 
   // mDNS
-  if (MDNS.begin("fluxaignis")) {
+  if (MDNS.begin("fluxaignis_prueba")) {
     addLog("info", "mDNS iniciado: fluxaignis.local");
     MDNS.addService("http", "tcp", 80);
   } else {
