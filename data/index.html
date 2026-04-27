@@ -27,9 +27,9 @@
             --flame-normal: #FFA726;
             --flame-danger: #FF3D00;
             --danger-glow: rgba(255, 61, 0, 0.6);
-            --color-firmware: #3F51B5;
+            --color-firmware: #7AF0D4;   /* cambiado a celeste */
             --color-littlefs: #FFA726;
-            --color-free: #7AF0D4;
+            --color-free: #7AF0D4;       /* también celeste */
             --status-online: #2e7d32;
             --status-offline: #c62828;
         }
@@ -99,7 +99,6 @@
             flex-direction: column;
             gap: 25px;
         }
-        /* Cuadrícula para los cuadros pequeños (2 columnas) */
         .right-small-cards {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -145,7 +144,6 @@
             width: 100%;
             transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        /* Estilo unificado para botones tipo "Barrido de Radar" */
         .btn-glass {
             background: rgba(255, 255, 255, 0.05);
             border: 2px solid var(--accent-cyan);
@@ -184,7 +182,6 @@
             background: rgba(122,240,212,0.1);
             transform: translateY(-2px);
         }
-        /* Badge de estado */
         .status-badge {
             display: inline-block;
             padding: 4px 12px;
@@ -344,6 +341,7 @@
             font-size: 16px;
             font-weight: bold;
             margin-top: 4px;
+            word-break: break-word;
         }
         .progress-bar {
             background: rgba(0,0,0,0.4);
@@ -428,7 +426,6 @@
             margin-bottom: 8px;
             text-decoration: underline;
         }
-        /* Modal mejorado */
         .modal {
             display: none;
             position: fixed;
@@ -541,7 +538,7 @@
         </div>
 
         <div class="dashboard-grid">
-            <!-- Columna izquierda (sin cambios) -->
+            <!-- Columna izquierda -->
             <div class="left-column">
                 <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
@@ -1003,6 +1000,7 @@
                 const uptime = info.uptime || 0;
                 const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
                 const totalKB = 1992 + 128;
+                const mdnsHost = info.mdns || 'fluxaignis.local';
                 document.getElementById('statsGrid').innerHTML = `
                     <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${info.firmware || '--'}</div></div>
                     <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
@@ -1011,6 +1009,7 @@
                     <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${info.ip_ap || '--'}</div></div>
                     <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${info.ip_sta || '--'}</div></div>
                     <div class="stat-card"><div class="stat-label">MQTT broker</div><div class="stat-value">${info.mqtt_status || '--'}</div></div>
+                    <div class="stat-card"><div class="stat-label">mDNS</div><div class="stat-value">${mdnsHost}</div></div>
                 `;
             } catch(e) {
                 document.getElementById('statsGrid').innerHTML = `<div class="stat-card">Error cargando estadísticas</div>`;
@@ -1227,7 +1226,7 @@
         // Arranque
         fetchEstado();
         setInterval(fetchEstado, 2000);
-        addSystemLog("🚀 Panel Modo AP cargado - Interfaz corregida", 'info');
+        addSystemLog("🚀 Panel Modo AP cargado - Colores de flash actualizados + mDNS", 'info');
     </script>
 </body>
 </html>
