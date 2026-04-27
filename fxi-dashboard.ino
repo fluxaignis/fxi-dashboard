@@ -15,7 +15,7 @@
 #include <ArduinoJson.h>
 
 // ==================== BUFFER DE LOGS (MEJORADO) ====================
-#define MAX_LOGS 30   // Reducido de 50 a 30 para acelerar la respuesta MQTT
+#define MAX_LOGS 30   // Reducido de 50 a 30 para acelerar respuesta MQTT
 struct LogEntry {
   unsigned long timestamp;
   String level;
@@ -26,7 +26,7 @@ int logIndex = 0;
 int logCount = 0;
 
 void addLog(String level, String message) {
-  // Truncar mensajes demasiado largos (más de 100 caracteres)
+  // Truncar mensajes largos (más de 100 caracteres)
   if (message.length() > 100) message = message.substring(0, 97) + "...";
   logBuffer[logIndex].timestamp = millis();
   logBuffer[logIndex].level = level;
@@ -172,8 +172,7 @@ void processAdminCommand(int id, const String &action) {
         respondAdminCommand(id, true, data);
     }
     else if (action == "get_logs") {
-        // Buffer aumentado a 6144 bytes para evitar desbordamiento
-        DynamicJsonDocument data(6144);
+        DynamicJsonDocument data(6144);   // Buffer ampliado
         JsonArray logs = data.createNestedArray("logs");
         int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
         for (int i = 0; i < logCount; i++) {
@@ -316,7 +315,7 @@ void handleInfo() {
   doc["ip_ap"] = WiFi.softAPIP().toString();
   doc["ip_sta"] = WiFi.localIP().toString();
   doc["mqtt_status"] = client.connected() ? "conectado" : "desconectado";
-  doc["mdns"] = "fluxaignis.local";
+  doc["mdns"] = "fluxaignis.local";   // Nombre unificado
   String json;
   serializeJson(doc, json);
   server.send(200, "application/json", json);
@@ -509,6 +508,7 @@ void setup() {
   FIRMWARE_VERSION = leerVersion();
   addLog("info", "Firmware version: " + FIRMWARE_VERSION);
 
+  // Hotspot AP
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAPConfig(apIP, apGateway, apSubnet);
   WiFi.softAP(ap_ssid, ap_password);
@@ -517,16 +517,15 @@ void setup() {
   dnsServer.start(53, "*", apIP);
   addLog("info", "DNS Captive Portal activado");
 
+  // Configuración inicial mDNS (ambas interfaces)
   if (MDNS.begin("fluxaignis")) {
-    addLog("info", "✅ mDNS iniciado correctamente como fluxaignis.local");
     MDNS.addService("http", "tcp", 80);
-    Serial.print("Dirección IP del ESP32: ");
-    Serial.println(WiFi.localIP());
-    Serial.println("Ahora puedes acceder a http://fluxaignis.local");
+    addLog("info", "✅ mDNS iniciado correctamente como fluxaignis.local");
   } else {
     addLog("error", "❌ Error al iniciar mDNS");
   }
 
+  // WiFi externa
   WiFi.begin(ssid, password);
   int intentos = 0;
   while (WiFi.status() != WL_CONNECTED && intentos < 20) {
@@ -534,22 +533,35 @@ void setup() {
     Serial.print(".");
     intentos++;
   }
+
   if (WiFi.status() == WL_CONNECTED) {
     addLog("info", "WiFi externo conectado - IP: " + WiFi.localIP().toString());
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     espClient.setInsecure();
     client.setServer(mqtt_server, 8883);
     client.setCallback(callback);
+
+    // Re-registrar mDNS para que se anuncie correctamente en la interfaz STA
+    MDNS.end();
+    if (MDNS.begin("fluxaignis")) {
+      MDNS.addService("http", "tcp", 80);
+      addLog("info", "mDNS re-registrado correctamente en interfaz STA");
+    } else {
+      addLog("warn", "Error al re-registrar mDNS en interfaz STA");
+    }
+
     chequearActualizacionGitHub();
   } else {
     addLog("warn", "No se pudo conectar a red externa. Modo offline + hotspot.");
   }
 
+  // ArduinoOTA (el nombre puede ser diferente, no interfiere con el mDNS principal)
   ArduinoOTA.setHostname("fluxaignis_ota");
   ArduinoOTA.setPassword("12345678");
   ArduinoOTA.begin();
   addLog("info", "OTA clásico iniciado (hostname: fluxaignis_ota).");
 
+  // Servidor web
   server.on("/", handleRoot);
   server.on("/estado", handleEstado);
   server.on("/toggleServo", handleToggle);
@@ -580,6 +592,7 @@ void loop() {
   server.handleClient();
   ArduinoOTA.handle();
 
+  // Comandos por Serial
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
@@ -604,6 +617,7 @@ void loop() {
     }
   }
 
+  // MQTT
   if (WiFi.status() == WL_CONNECTED) {
     if (!client.connected()) {
       if (client.connect("ESP32_FXI", "Admin", "FluxaIgnis2026")) {
@@ -619,6 +633,7 @@ void loop() {
 
   unsigned long ahora = millis();
 
+  // DHT11 cada 2 segundos
   if (ahora - ultimoTiempoDHT >= 2000) {
     float t = dht.readTemperature();
     float h = dht.readHumidity();
@@ -629,6 +644,7 @@ void loop() {
 
   rssiGuardado = WiFi.RSSI();
 
+  // Detección de fuego
   int lecturaLlama = (simularFuego) ? 300 : analogRead(PIN_LLAMA);
   if (lecturaLlama < 50) lecturaLlama = 4095;
   if (estadoActual == REPOSO && lecturaLlama < UMBRAL_FUEGO) {
@@ -640,6 +656,7 @@ void loop() {
     }
   }
 
+  // Temperatura crítica
   if (tempGuardada >= TEMP_CRITICA) {
     if (!emergenciaEnviada) {
       enviarNotificacionMQTT("CALOR CRITICO", tempGuardada);
@@ -650,6 +667,7 @@ void loop() {
     emergenciaEnviada = false;
   }
 
+  // LEDs y buzzer
   if (estadoActual != REPOSO) {
     setColor(255, 0, 0);
     if ((ahora / 300) % 2 == 0) tone(PIN_BUZZER, 2000);
@@ -662,6 +680,7 @@ void loop() {
     setColor(r, g, b);
   }
 
+  // Máquina de estados del servo
   switch (estadoActual) {
     case REPOSO: break;
     case ESPERANDO_AGUA:
@@ -695,6 +714,7 @@ void loop() {
       break;
   }
 
+  // Publicación MQTT (datos, RSSI)
   if (WiFi.status() == WL_CONNECTED && client.connected()) {
     if (ahora - cronometroDatos > 2000) {
       cronometroDatos = ahora;
@@ -709,11 +729,13 @@ void loop() {
     }
   }
 
+  // Chequeo periódico de OTA
   if (ahora - ultimoChequeoOTA >= INTERVALO_OTA) {
     ultimoChequeoOTA = ahora;
     chequearActualizacionGitHub();
   }
 
+  // Actualización periódica del HTML (cada 24h)
   static unsigned long ultimaActualizacionHTML = 0;
   if (ahora - ultimaActualizacionHTML >= 86400000UL) {
     if (WiFi.status() == WL_CONNECTED) {
