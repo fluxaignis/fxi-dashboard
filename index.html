@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>FXI Panel de control - MQTT completo</title>
+    <title>FXI Panel de control - Híbrido (MQTT + HTTP)</title>
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="apple-touch-icon" href="favicon-192x192.png">
     <link rel="manifest" href="manifest.json">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        /* ==================== BASE (igual) ==================== */
+        /* ==================== BASE (Mismo estilo de siempre) ==================== */
         :root {
             --bg-start: #0B3954;
             --bg-end: #061A2B;
@@ -55,7 +53,6 @@
         body.danger-alert .glass-card {
             box-shadow: 0 0 15px var(--danger-glow), 0 0 30px rgba(255, 61, 0, 0.3);
             border-color: var(--flame-danger);
-            transition: all 0.3s ease;
         }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
@@ -269,8 +266,6 @@
         }
         .legend-temp { color: #F06292; }
         .legend-hum { color: #4FC3F7; }
-
-        /* ----- ADMIN PANEL (sin cambios visuales) ----- */
         .admin-card {
             transition: all 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1);
             cursor: pointer;
@@ -531,15 +526,15 @@
             <div>
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <span style="font-weight: 600;">Módulo ESP32</span>
-                    <span id="esp-status" class="status-badge">MQTT: Conectando...</span>
+                    <span id="esp-status" class="status-badge">Inicializando...</span>
                 </div>
-                <div style="font-size: 11px; color: var(--text-sec);">Sistema Activo (MQTT puro)</div>
+                <div style="font-size: 11px; color: var(--text-sec);" id="modo-indicador">Modo: --</div>
             </div>
             <div id="theme-toggle">✳</div>
         </div>
 
         <div class="dashboard-grid">
-            <!-- Columna izquierda (datos en tiempo real) -->
+            <!-- Columna izquierda (datos) -->
             <div class="left-column">
                 <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
@@ -592,7 +587,7 @@
                 </div>
             </div>
 
-            <!-- Columna derecha (controles y admin) -->
+            <!-- Columna derecha -->
             <div class="right-column">
                 <div class="right-small-cards">
                     <div class="glass-card flame-card" style="grid-column: span 2; text-align: center;">
@@ -610,7 +605,7 @@
                     </div>
                     <div class="glass-card">
                         <div class="card-title">Estado Red</div>
-                        <div id="net-status" style="color: var(--accent-cyan);">MQTT: Conectando...</div>
+                        <div id="net-status" style="color: var(--accent-cyan);">--</div>
                     </div>
                     <div class="glass-card">
                         <div class="card-title">Barrido de Radar</div>
@@ -624,7 +619,7 @@
                     </div>
                 </div>
 
-                <!-- Panel de Administración (ahora 100% MQTT) -->
+                <!-- Panel de Administración (híbrido) -->
                 <div class="glass-card admin-card" id="adminCard">
                     <div class="admin-reduced">
                         <span>🔐</span>
@@ -633,8 +628,12 @@
                     </div>
                     <div class="admin-expanded">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <div class="card-title">CENTRO DE CONTROL (MQTT)</div>
+                            <div class="card-title">CENTRO DE CONTROL <span id="admin-mode-badge" style="font-size: 9px; background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 20px;">MQTT</span></div>
                             <span id="closeAdmin" style="cursor:pointer; font-size: 24px;">&times;</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px; justify-content: flex-end;">
+                            <button id="forceHttpBtn" class="range-btn" style="background: var(--chart-pink); color:white;">Forzar HTTP</button>
+                            <button id="forceMqttBtn" class="range-btn" style="background: var(--accent-cyan);">Volver a MQTT</button>
                         </div>
                         <!-- Estadísticas -->
                         <div class="admin-section open" id="secStats">
@@ -643,7 +642,7 @@
                                 <span class="admin-section-icon">▶</span>
                             </div>
                             <div class="admin-section-content">
-                                <div class="stats-grid" id="statsGrid">Cargando vía MQTT...</div>
+                                <div class="stats-grid" id="statsGrid">Cargando...</div>
                             </div>
                         </div>
                         <!-- Acciones Rápidas -->
@@ -656,10 +655,10 @@
                                 <div class="action-blocks" id="actionBlocks"></div>
                             </div>
                         </div>
-                        <!-- Rendimiento (latencia MQTT) -->
+                        <!-- Rendimiento -->
                         <div class="admin-section open" id="secPerf">
                             <div class="admin-section-header">
-                                <span class="admin-section-title">📈 Rendimiento (latencia MQTT)</span>
+                                <span class="admin-section-title">📈 Rendimiento</span>
                                 <span class="admin-section-icon">▶</span>
                             </div>
                             <div class="admin-section-content">
@@ -690,7 +689,7 @@
                             <div class="admin-section-content">
                                 <button id="toggleTimestampBtn" class="toggle-timestamp">Mostrar timestamps</button>
                                 <div class="log-container" id="liveLogs">
-                                    <div class="log-entry log-info">→ Esperando datos por MQTT...</div>
+                                    <div class="log-entry log-info">→ Inicializando...</div>
                                 </div>
                             </div>
                         </div>
@@ -715,7 +714,7 @@
     <div id="toast" class="toast">Mensaje</div>
 
     <script>
-        // ========== TOAST Y MODAL (sin cambios) ==========
+        // ========== TOAST Y MODAL ==========
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
@@ -770,8 +769,9 @@
 
         // MQTT
         let mqttClient = null;
+        let mqttConnected = false;
         let nextCommandId = 1;
-        const pendingRequests = new Map(); // id -> { resolve, reject, timeout }
+        const pendingRequests = new Map();
 
         const mqttOptions = {
             connectTimeout: 4000,
@@ -781,7 +781,132 @@
         };
         const mqttBroker = 'wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt';
 
-        // ========== FUNCIONES DE UI ==========
+        // Modo de operación: 'mqtt' o 'http'
+        let currentMode = 'mqtt';
+        let forcedMode = null;
+
+        // ========== FUNCIONES HTTP (fallback) ==========
+        async function httpGetJson(url) {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        }
+
+        async function httpSendCommand(cmd) {
+            const res = await fetch(`/cmd?action=${cmd}`);
+            return await res.text();
+        }
+
+        async function httpGetEstado() {
+            const data = await httpGetJson('/estado');
+            actualizarTemperatura(data.temp);
+            actualizarHumedad(data.hum);
+            actualizarRSSI(data.rssi);
+            addDataPoint(data.temp, data.hum);
+        }
+
+        async function httpUpdateStatsUI() {
+            try {
+                const info = await httpGetJson('/info');
+                const sketchPercent = info.sketch_percent || 45;
+                const littlefsPercent = info.littlefs_percent || 23;
+                const freePercent = 100 - (sketchPercent + littlefsPercent);
+                const heapPercent = info.heap_percent || 0;
+                const uptime = info.uptime || 0;
+                const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
+                const totalKB = 1992 + 128;
+                const mdnsHost = info.mdns || 'fluxaignis_ota.local';
+                document.getElementById('statsGrid').innerHTML = `
+                    <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${info.firmware || '--'}</div></div>
+                    <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
+                    <div class="stat-card"><div class="stat-label">RAM (Heap)</div><div class="stat-value">${heapPercent}%</div><div class="progress-bar"><div class="progress-fill" style="width: ${heapPercent}%"></div></div></div>
+                    <div class="stat-card"><div class="stat-label">Flash usado</div><div class="stat-value">${Math.round(usedKB)} KB / ${totalKB} KB (${Math.round(sketchPercent+littlefsPercent)}%)</div><div class="stacked-bar"><div class="segment-firmware" style="width: ${sketchPercent}%;"></div><div class="segment-littlefs" style="width: ${littlefsPercent}%;"></div><div class="segment-free" style="width: ${freePercent}%;"></div></div></div>
+                    <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${info.ip_ap || '--'}</div></div>
+                    <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${info.ip_sta || '--'}</div></div>
+                    <div class="stat-card"><div class="stat-label">MQTT broker</div><div class="stat-value">${info.mqtt_status || '--'}</div></div>
+                    <div class="stat-card"><div class="stat-label">mDNS</div><div class="stat-value">${mdnsHost}</div></div>
+                `;
+            } catch(e) {
+                document.getElementById('statsGrid').innerHTML = `<div class="stat-card">Error HTTP: ${e.message}</div>`;
+            }
+        }
+
+        async function httpUpdateLogsUI() {
+            try {
+                const data = await httpGetJson('/logs');
+                const logs = data.logs || [];
+                const logDiv = document.getElementById('liveLogs');
+                if (!logDiv) return;
+                if (logs.length === 0) {
+                    logDiv.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>';
+                    return;
+                }
+                logDiv.innerHTML = '';
+                logs.slice().reverse().forEach(log => {
+                    const t = new Date(log.timestamp).toLocaleTimeString();
+                    const entry = document.createElement('div');
+                    entry.className = `log-entry log-${log.level}`;
+                    entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
+                    logDiv.appendChild(entry);
+                });
+            } catch(e) {
+                const logDiv = document.getElementById('liveLogs');
+                if (logDiv) logDiv.innerHTML = `<div class="log-entry log-error">Error HTTP: ${e.message}</div>`;
+            }
+        }
+
+        async function httpMeasurePing() {
+            const start = performance.now();
+            try {
+                await fetch('/estado', { method: 'HEAD' });
+                const duration = performance.now() - start;
+                pingHistory.push(duration);
+                if (pingHistory.length > 20) pingHistory.shift();
+                drawPingGraph();
+                const avg = pingHistory.reduce((a,b)=>a+b,0)/pingHistory.length;
+                document.getElementById('avgPing').innerText = avg.toFixed(1);
+            } catch(e) {}
+        }
+
+        // ========== FUNCIONES MQTT ==========
+        function sendAdminCommand(action, payload = {}) {
+            return new Promise((resolve, reject) => {
+                if (!mqttClient || !mqttConnected) {
+                    reject(new Error("MQTT no conectado"));
+                    return;
+                }
+                const id = nextCommandId++;
+                payload.id = id;
+                payload.action = action;
+                const message = JSON.stringify(payload);
+                const timeout = setTimeout(() => {
+                    pendingRequests.delete(id);
+                    reject(new Error(`Timeout para comando ${action} (id=${id})`));
+                }, 10000);  // timeout aumentado a 10 segundos
+                pendingRequests.set(id, { resolve, reject, timeout });
+                mqttClient.publish('fxi/admin/cmd', message);
+            });
+        }
+
+        function handleAdminResponse(topic, payload) {
+            try {
+                const msg = payload.toString();
+                const data = JSON.parse(msg);
+                const id = data.id;
+                if (id === undefined) return;
+                const entry = pendingRequests.get(id);
+                if (!entry) return;
+                clearTimeout(entry.timeout);
+                pendingRequests.delete(id);
+                if (data.success) {
+                    entry.resolve(data.data || {});
+                } else {
+                    entry.reject(new Error(data.error || "Error desconocido"));
+                }
+            } catch(e) {}
+        }
+
+        // ========== FUNCIONES DE UI COMUNES ==========
         function setDangerMode(active, motivo = "") {
             if (active === dangerMode) return;
             dangerMode = active;
@@ -805,7 +930,7 @@
         function resetAlertaForzado() {
             emergenciaActivaMQTT = false;
             setDangerMode(false, "");
-            if (simulationActive && mqttClient && mqttClient.connected) {
+            if (simulationActive && mqttClient && mqttConnected) {
                 mqttClient.publish('fxi/simular', 'FUEGO_OFF');
                 simulationActive = false;
             }
@@ -813,8 +938,10 @@
             statusDiv.innerText = "Alerta reiniciada manualmente";
             showToast("Alerta reseteada");
             setTimeout(() => {
-                if (!dangerMode && mqttClient?.connected) statusDiv.innerText = "MQTT: Conectado";
-                else if (dangerMode) statusDiv.innerText = "Modo peligro activo";
+                if (!dangerMode) {
+                    if (currentMode === 'mqtt') statusDiv.innerText = "MQTT: Conectado";
+                    else statusDiv.innerText = "HTTP: Conectado";
+                } else statusDiv.innerText = "Modo peligro activo";
             }, 2000);
         }
 
@@ -871,7 +998,7 @@
             drawSVG();
         }
 
-        // ========== ACTUALIZACIÓN UI (desde MQTT) ==========
+        // ========== ACTUALIZACIÓN UI ==========
         function actualizarTemperatura(temp) {
             const tempVal = parseFloat(temp);
             document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
@@ -917,71 +1044,33 @@
             else el.style.color = '#F06292';
         }
 
-        // ========== MQTT ADMIN: ENVÍO DE COMANDOS ==========
-        function sendAdminCommand(action, payload = {}) {
-            return new Promise((resolve, reject) => {
-                if (!mqttClient || !mqttClient.connected) {
-                    reject(new Error("MQTT no conectado"));
-                    return;
-                }
-                const id = nextCommandId++;
-                payload.id = id;
-                payload.action = action;
-                const message = JSON.stringify(payload);
-                const timeout = setTimeout(() => {
-                    pendingRequests.delete(id);
-                    reject(new Error(`Timeout para comando ${action} (id=${id})`));
-                }, 10000);
-                pendingRequests.set(id, { resolve, reject, timeout });
-                mqttClient.publish('fxi/admin/cmd', message);
-            });
-        }
-
-        // Manejador de respuestas MQTT (se suscribe a fxi/admin/resp)
-        function handleAdminResponse(topic, payload) {
-            try {
-                const msg = payload.toString();
-                const data = JSON.parse(msg);
-                const id = data.id;
-                if (id === undefined) return;
-                const entry = pendingRequests.get(id);
-                if (!entry) return;
-                clearTimeout(entry.timeout);
-                pendingRequests.delete(id);
-                if (data.success) {
-                    entry.resolve(data.data || {});
-                } else {
-                    entry.reject(new Error(data.error || "Error desconocido"));
-                }
-            } catch(e) {
-                console.error("Error parseando respuesta admin:", e);
-            }
-        }
-
-        // ========== FUNCIONES DE ADMIN (basadas en MQTT) ==========
+        // ========== ADMIN GENÉRICO (usa modo actual) ==========
         async function updateStatsUI() {
             if (!adminAuthenticated) return;
             try {
-                const stats = await sendAdminCommand('get_stats');
-                // stats contiene los campos: firmware, uptime, heap_percent, sketch_percent, littlefs_percent, ip_ap, ip_sta, mqtt_status, mdns
-                const sketchPercent = stats.sketch_percent || 45;
-                const littlefsPercent = stats.littlefs_percent || 23;
-                const freePercent = 100 - (sketchPercent + littlefsPercent);
-                const heapPercent = stats.heap_percent || 0;
-                const uptime = stats.uptime || 0;
-                const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
-                const totalKB = 1992 + 128;
-                const mdnsHost = stats.mdns || 'fluxaignis_ota.local';
-                document.getElementById('statsGrid').innerHTML = `
-                    <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${stats.firmware || '--'}</div></div>
-                    <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
-                    <div class="stat-card"><div class="stat-label">RAM (Heap)</div><div class="stat-value">${heapPercent}%</div><div class="progress-bar"><div class="progress-fill" style="width: ${heapPercent}%"></div></div></div>
-                    <div class="stat-card"><div class="stat-label">Flash usado</div><div class="stat-value">${Math.round(usedKB)} KB / ${totalKB} KB (${Math.round(sketchPercent+littlefsPercent)}%)</div><div class="stacked-bar"><div class="segment-firmware" style="width: ${sketchPercent}%;"></div><div class="segment-littlefs" style="width: ${littlefsPercent}%;"></div><div class="segment-free" style="width: ${freePercent}%;"></div></div></div>
-                    <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${stats.ip_ap || '--'}</div></div>
-                    <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${stats.ip_sta || '--'}</div></div>
-                    <div class="stat-card"><div class="stat-label">MQTT broker</div><div class="stat-value">${stats.mqtt_status || '--'}</div></div>
-                    <div class="stat-card"><div class="stat-label">mDNS</div><div class="stat-value">${mdnsHost}</div></div>
-                `;
+                if (currentMode === 'mqtt') {
+                    const stats = await sendAdminCommand('get_stats');
+                    const sketchPercent = stats.sketch_percent || 45;
+                    const littlefsPercent = stats.littlefs_percent || 23;
+                    const freePercent = 100 - (sketchPercent + littlefsPercent);
+                    const heapPercent = stats.heap_percent || 0;
+                    const uptime = stats.uptime || 0;
+                    const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
+                    const totalKB = 1992 + 128;
+                    const mdnsHost = stats.mdns || 'fluxaignis_ota.local';
+                    document.getElementById('statsGrid').innerHTML = `
+                        <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${stats.firmware || '--'}</div></div>
+                        <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
+                        <div class="stat-card"><div class="stat-label">RAM (Heap)</div><div class="stat-value">${heapPercent}%</div><div class="progress-bar"><div class="progress-fill" style="width: ${heapPercent}%"></div></div></div>
+                        <div class="stat-card"><div class="stat-label">Flash usado</div><div class="stat-value">${Math.round(usedKB)} KB / ${totalKB} KB (${Math.round(sketchPercent+littlefsPercent)}%)</div><div class="stacked-bar"><div class="segment-firmware" style="width: ${sketchPercent}%;"></div><div class="segment-littlefs" style="width: ${littlefsPercent}%;"></div><div class="segment-free" style="width: ${freePercent}%;"></div></div></div>
+                        <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${stats.ip_ap || '--'}</div></div>
+                        <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${stats.ip_sta || '--'}</div></div>
+                        <div class="stat-card"><div class="stat-label">MQTT broker</div><div class="stat-value">${stats.mqtt_status || '--'}</div></div>
+                        <div class="stat-card"><div class="stat-label">mDNS</div><div class="stat-value">${mdnsHost}</div></div>
+                    `;
+                } else {
+                    await httpUpdateStatsUI();
+                }
             } catch(e) {
                 document.getElementById('statsGrid').innerHTML = `<div class="stat-card">Error: ${e.message}</div>`;
             }
@@ -990,42 +1079,124 @@
         async function updateLogsUI() {
             if (!adminAuthenticated) return;
             try {
-                const data = await sendAdminCommand('get_logs');
-                const logs = data.logs || [];
-                const logDiv = document.getElementById('liveLogs');
-                if (!logDiv) return;
-                if (logs.length === 0) {
-                    logDiv.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>';
-                    return;
+                if (currentMode === 'mqtt') {
+                    const data = await sendAdminCommand('get_logs');
+                    const logs = data.logs || [];
+                    const logDiv = document.getElementById('liveLogs');
+                    if (!logDiv) return;
+                    if (logs.length === 0) {
+                        logDiv.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>';
+                        return;
+                    }
+                    logDiv.innerHTML = '';
+                    logs.slice().reverse().forEach(log => {
+                        const t = new Date(log.timestamp).toLocaleTimeString();
+                        const entry = document.createElement('div');
+                        entry.className = `log-entry log-${log.level}`;
+                        entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
+                        logDiv.appendChild(entry);
+                    });
+                } else {
+                    await httpUpdateLogsUI();
                 }
-                logDiv.innerHTML = '';
-                logs.slice().reverse().forEach(log => {
-                    const t = new Date(log.timestamp).toLocaleTimeString();
-                    const entry = document.createElement('div');
-                    entry.className = `log-entry log-${log.level}`;
-                    entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
-                    logDiv.appendChild(entry);
-                });
             } catch(e) {
                 const logDiv = document.getElementById('liveLogs');
-                if (logDiv) logDiv.innerHTML = `<div class="log-entry log-error">Error cargando logs: ${e.message}</div>`;
+                if (logDiv) logDiv.innerHTML = `<div class="log-entry log-error">Error: ${e.message}</div>`;
             }
         }
 
         async function measurePing() {
             if (!adminAuthenticated) return;
-            const start = performance.now();
             try {
-                await sendAdminCommand('ping');
-                const duration = performance.now() - start;
-                pingHistory.push(duration);
-                if (pingHistory.length > 20) pingHistory.shift();
-                drawPingGraph();
-                const avg = pingHistory.reduce((a,b)=>a+b,0)/pingHistory.length;
-                document.getElementById('avgPing').innerText = avg.toFixed(1);
-            } catch(e) {
-                // No actualizar el gráfico si falla
+                if (currentMode === 'mqtt') {
+                    const start = performance.now();
+                    await sendAdminCommand('ping');
+                    const duration = performance.now() - start;
+                    pingHistory.push(duration);
+                    if (pingHistory.length > 20) pingHistory.shift();
+                    drawPingGraph();
+                    const avg = pingHistory.reduce((a,b)=>a+b,0)/pingHistory.length;
+                    document.getElementById('avgPing').innerText = avg.toFixed(1);
+                } else {
+                    await httpMeasurePing();
+                }
+            } catch(e) {}
+        }
+
+        async function sendCommand(cmd) {
+            if (!adminAuthenticated) {
+                showToast("Accede al panel de admin primero", true);
+                return;
             }
+            addSystemLog(`Comando: ${cmd} (modo ${currentMode})`, 'info');
+            try {
+                if (currentMode === 'mqtt') {
+                    if (cmd === 'restart') {
+                        await sendAdminCommand('restart');
+                        showToast("Reiniciando ESP32...");
+                        setTimeout(() => location.reload(), 3000);
+                    } else if (cmd === 'check_ota') {
+                        await sendAdminCommand('check_ota');
+                        showToast("Comprobando actualizaciones...");
+                    } else if (cmd === 'toggle_sim') {
+                        const resp = await sendAdminCommand('toggle_sim');
+                        simulationActive = resp.simulating;
+                        addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn');
+                        showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`);
+                        if (mqttClient && mqttConnected) {
+                            mqttClient.publish('fxi/simular', simulationActive ? 'FUEGO_ON' : 'FUEGO_OFF');
+                        }
+                    } else if (cmd === 'clear_logs') {
+                        await sendAdminCommand('clear_logs');
+                        document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs limpiados</div>';
+                        showToast("Logs limpiados");
+                    } else if (cmd === 'update_fw') {
+                        await sendAdminCommand('update_fw');
+                        showToast("Iniciando actualización de firmware...");
+                    } else if (cmd === 'update_html') {
+                        await sendAdminCommand('update_html');
+                        showToast("HTML actualizado. Recargando...");
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
+                } else {
+                    // Modo HTTP
+                    if (cmd === 'restart') {
+                        await httpSendCommand('restart');
+                        showToast("Reiniciando ESP32...");
+                        setTimeout(() => location.reload(), 3000);
+                    } else if (cmd === 'check_ota') {
+                        await httpSendCommand('check_ota');
+                        showToast("Comprobando actualizaciones...");
+                    } else if (cmd === 'toggle_sim') {
+                        await httpSendCommand('toggle_sim');
+                        simulationActive = !simulationActive;
+                        addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn');
+                        showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`);
+                    } else if (cmd === 'clear_logs') {
+                        await httpSendCommand('clear_logs');
+                        document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs limpiados</div>';
+                        showToast("Logs limpiados");
+                    } else if (cmd === 'update_fw') {
+                        await httpSendCommand('update_fw');
+                        showToast("Iniciando actualización de firmware...");
+                    } else if (cmd === 'update_html') {
+                        await httpSendCommand('update_html');
+                        showToast("HTML actualizado. Recargando...");
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
+                }
+            } catch(e) {
+                addSystemLog(`Error en comando ${cmd}: ${e.message}`, 'error');
+                showToast(`Error: ${e.message}`, true);
+            }
+        }
+
+        function formatUptime(seconds) {
+            let d = Math.floor(seconds / 86400);
+            let h = Math.floor((seconds % 86400) / 3600);
+            let m = Math.floor((seconds % 3600) / 60);
+            let s = seconds % 60;
+            return `${d}d ${h}h ${m}m ${s}s`;
         }
 
         function drawPingGraph() {
@@ -1052,63 +1223,12 @@
             ctx.stroke();
         }
 
-        function formatUptime(seconds) {
-            let d = Math.floor(seconds / 86400);
-            let h = Math.floor((seconds % 86400) / 3600);
-            let m = Math.floor((seconds % 3600) / 60);
-            let s = seconds % 60;
-            return `${d}d ${h}h ${m}m ${s}s`;
-        }
-
-        // Comandos de acción (restart, toggle_sim, clear_logs, check_ota, update_fw, update_html)
-        async function sendCommand(cmd) {
-            if (!adminAuthenticated) {
-                showToast("Accede al panel de admin primero", true);
-                return;
-            }
-            addSystemLog(`Comando MQTT: ${cmd}`, 'info');
-            try {
-                if (cmd === 'restart') {
-                    await sendAdminCommand('restart');
-                    showToast("Reiniciando ESP32...");
-                    setTimeout(() => location.reload(), 3000);
-                } else if (cmd === 'check_ota') {
-                    await sendAdminCommand('check_ota');
-                    showToast("Comprobando actualizaciones...");
-                } else if (cmd === 'toggle_sim') {
-                    const resp = await sendAdminCommand('toggle_sim');
-                    simulationActive = resp.simulating;
-                    addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn');
-                    showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`);
-                    if (mqttClient && mqttClient.connected) {
-                        mqttClient.publish('fxi/simular', simulationActive ? 'FUEGO_ON' : 'FUEGO_OFF');
-                    }
-                } else if (cmd === 'clear_logs') {
-                    await sendAdminCommand('clear_logs');
-                    document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs limpiados</div>';
-                    showToast("Logs limpiados");
-                } else if (cmd === 'update_fw') {
-                    await sendAdminCommand('update_fw');
-                    showToast("Iniciando actualización de firmware...");
-                } else if (cmd === 'update_html') {
-                    await sendAdminCommand('update_html');
-                    showToast("HTML actualizado. Recargando...");
-                    setTimeout(() => window.location.reload(), 1000);
-                } else {
-                    showToast(`Comando ${cmd} ejecutado`);
-                }
-            } catch(e) {
-                addSystemLog(`Error en comando ${cmd}: ${e.message}`, 'error');
-                showToast(`Error: ${e.message}`, true);
-            }
-        }
-
-        // ========== CONTROL DEL SERVO (MQTT) ==========
+        // ========== CONTROL DEL SERVO (fallback) ==========
         async function toggleServo() {
             const btn = document.getElementById('btn-servo');
             btn.innerText = "ENVIANDO...";
             btn.style.opacity = "0.7";
-            if (mqttClient && mqttClient.connected) {
+            if (currentMode === 'mqtt' && mqttClient && mqttConnected) {
                 mqttClient.publish('fxi/comandos', 'TOGGLE');
                 setTimeout(() => {
                     btn.style.opacity = "1";
@@ -1123,38 +1243,55 @@
                     }
                 }, 300);
             } else {
-                btn.style.opacity = "1";
-                btn.classList.remove('active');
-                btn.innerText = "SIN CONEXIÓN";
-                setTimeout(() => btn.innerText = "DESACTIVADO", 3000);
-                addSystemLog("❌ MQTT no conectado para control de servo", 'error');
-                showToast("MQTT no conectado", true);
+                // Fallback HTTP
+                try {
+                    const res = await fetch('/toggleServo');
+                    const state = await res.text();
+                    btn.style.opacity = "1";
+                    if (state === "ON") {
+                        btn.classList.add('active');
+                        btn.innerText = "SISTEMA ACTIVO";
+                        addSystemLog("🔁 Servo activado (HTTP)", 'info');
+                    } else {
+                        btn.classList.remove('active');
+                        btn.innerText = "DESACTIVADO";
+                        addSystemLog("🔁 Servo desactivado (HTTP)", 'info');
+                    }
+                } catch(e) {
+                    btn.classList.remove('active');
+                    btn.style.opacity = "1";
+                    btn.innerText = "SIN CONEXIÓN";
+                    setTimeout(() => btn.innerText = "DESACTIVADO", 3000);
+                    addSystemLog("❌ Error en comando del servo.", 'error');
+                    showToast("Error al comunicar con el ESP32", true);
+                }
             }
         }
 
-        // ========== MQTT PRINCIPAL ==========
+        // ========== MQTT ==========
         function conectarMQTT() {
             if (mqttClient && mqttClient.connected) mqttClient.end();
             mqttClient = mqtt.connect(mqttBroker, mqttOptions);
 
             mqttClient.on('connect', () => {
                 console.log('MQTT conectado');
+                mqttConnected = true;
                 document.getElementById('esp-status').innerText = 'Online (MQTT)';
                 document.getElementById('esp-status').classList.remove('offline');
                 document.getElementById('esp-status').classList.add('status-badge');
                 document.getElementById('net-status').innerHTML = 'MQTT: Conectado';
                 document.getElementById('net-status').style.color = 'var(--text-sec)';
-                // Topics de datos
                 mqttClient.subscribe('fxi/datos');
                 mqttClient.subscribe('fxi/rssi');
                 mqttClient.subscribe('fxi/emergencia');
                 mqttClient.subscribe('fxi/simular');
-                // Topic de respuestas admin
                 mqttClient.subscribe('fxi/admin/resp');
                 addSystemLog("✅ MQTT conectado a HiveMQ Cloud", 'info');
-                // Si el admin ya estaba autenticado, reiniciar los intervalos
-                if (adminAuthenticated) {
-                    startAdminServices();
+                if (forcedMode !== 'http') {
+                    setMode('mqtt');
+                }
+                if (currentMode === 'http') {
+                    setMode('mqtt');
                 }
             });
 
@@ -1172,8 +1309,7 @@
                             actualizarTemperatura(data.temp);
                             actualizarHumedad(data.hum);
                             addDataPoint(data.temp, data.hum);
-                        } else if (data.temp !== undefined) actualizarTemperatura(data.temp);
-                        else if (data.hum !== undefined) actualizarHumedad(data.hum);
+                        }
                     } else if (topicStr === 'fxi/rssi') {
                         const data = JSON.parse(msg);
                         if (data.rssi !== undefined) actualizarRSSI(data.rssi);
@@ -1184,13 +1320,13 @@
                         setDangerMode(true, motivo);
                         emergenciaActivaMQTT = true;
                         if (Notification.permission === "granted") {
-                            new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo + " | Temp: " + data.temperatura });
+                            new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo });
                         }
                         const statusDiv = document.getElementById('net-status');
                         statusDiv.innerHTML = "🔴 ¡EMERGENCIA! " + motivo;
                         statusDiv.style.color = "#FF3D00";
                         setTimeout(() => {
-                            if (!dangerMode && mqttClient?.connected) {
+                            if (!dangerMode && mqttConnected) {
                                 statusDiv.innerHTML = "MQTT: Conectado";
                                 statusDiv.style.color = "var(--text-sec)";
                             }
@@ -1203,16 +1339,44 @@
             });
 
             mqttClient.on('offline', () => {
+                mqttConnected = false;
                 document.getElementById('esp-status').innerText = 'Offline (MQTT)';
                 document.getElementById('esp-status').classList.add('offline');
                 document.getElementById('net-status').innerHTML = 'MQTT: Desconectado';
                 document.getElementById('net-status').style.color = '#F06292';
-                addSystemLog("⚠️ MQTT desconectado", 'warn');
+                addSystemLog("⚠️ MQTT desconectado, cambiando a modo HTTP si está disponible", 'warn');
+                if (forcedMode !== 'mqtt') {
+                    setMode('http');
+                }
+            });
+        }
+
+        // ========== CAMBIO DE MODO ==========
+        function setMode(mode) {
+            if (mode === currentMode) return;
+            currentMode = mode;
+            document.getElementById('admin-mode-badge').innerText = mode.toUpperCase();
+            document.getElementById('modo-indicador').innerHTML = `Modo: ${mode.toUpperCase()}`;
+            addSystemLog(`Cambiando a modo ${mode.toUpperCase()}`, 'info');
+            // Reiniciar intervalos de admin si estaban activos
+            if (adminAuthenticated) {
                 if (statsInterval) clearInterval(statsInterval);
                 if (logsInterval) clearInterval(logsInterval);
-                statsInterval = null;
-                logsInterval = null;
-            });
+                statsInterval = setInterval(() => { if (adminAuthenticated) updateStatsUI(); }, mode === 'mqtt' ? 8000 : 6000);
+                logsInterval = setInterval(() => { if (adminAuthenticated) updateLogsUI(); }, mode === 'mqtt' ? 5000 : 4000);
+                updateStatsUI();
+                updateLogsUI();
+            }
+            // Para datos en tiempo real: si modo HTTP, iniciar polling; si MQTT, los datos llegan solos
+            if (mode === 'http') {
+                if (window.httpInterval) clearInterval(window.httpInterval);
+                window.httpInterval = setInterval(() => {
+                    if (currentMode === 'http') httpGetEstado().catch(e => console.warn);
+                }, 2000);
+                httpGetEstado().catch(e => console.warn);
+            } else {
+                if (window.httpInterval) clearInterval(window.httpInterval);
+            }
         }
 
         function iniciarSistema() {
@@ -1221,10 +1385,15 @@
             statsInterval = null;
             logsInterval = null;
             conectarMQTT();
-            showToast("Reconectando MQTT...");
+            setTimeout(() => {
+                if (!mqttConnected && currentMode !== 'http' && forcedMode !== 'mqtt') {
+                    setMode('http');
+                }
+            }, 5000);
+            showToast("Reconectando...");
         }
 
-        // ========== ADMIN PANEL (autenticación y servicios) ==========
+        // ========== ADMIN PANEL ==========
         const adminCard = document.getElementById('adminCard');
         const closeAdminBtn = document.getElementById('closeAdmin');
 
@@ -1260,9 +1429,9 @@
             if (logsInterval) clearInterval(logsInterval);
             updateStatsUI();
             updateLogsUI();
-            statsInterval = setInterval(() => { if (adminAuthenticated && mqttClient?.connected) updateStatsUI(); }, 8000);
-            logsInterval = setInterval(() => { if (adminAuthenticated && mqttClient?.connected) updateLogsUI(); }, 5000);
-            setInterval(() => { if (adminAuthenticated && mqttClient?.connected) measurePing(); }, 5000);
+            statsInterval = setInterval(() => { if (adminAuthenticated) updateStatsUI(); }, currentMode === 'mqtt' ? 8000 : 6000);
+            logsInterval = setInterval(() => { if (adminAuthenticated) updateLogsUI(); }, currentMode === 'mqtt' ? 5000 : 4000);
+            setInterval(() => { if (adminAuthenticated) measurePing(); }, 5000);
             measurePing();
         }
 
@@ -1280,8 +1449,10 @@
         document.getElementById('resetAlertBtnSquare').addEventListener('click', resetAlertaForzado);
         document.getElementById('reconnectBtn').addEventListener('click', iniciarSistema);
         document.getElementById('btn-servo').addEventListener('click', toggleServo);
+        document.getElementById('forceHttpBtn').addEventListener('click', () => { forcedMode = 'http'; if (mqttConnected) mqttClient.end(); setMode('http'); });
+        document.getElementById('forceMqttBtn').addEventListener('click', () => { forcedMode = null; if (mqttConnected) setMode('mqtt'); else showToast("MQTT no conectado, no se puede cambiar", true); });
 
-        // Acciones rápidas (MQTT)
+        // Acciones rápidas
         const actions = [
             { icon: "🔄", label: "Reiniciar ESP32", cmd: "restart" },
             { icon: "🔍", label: "Comprobar OTA", cmd: "check_ota" },
@@ -1364,7 +1535,12 @@
         if (Notification.permission === "default") Notification.requestPermission();
 
         conectarMQTT();
-        addSystemLog("🚀 Panel 100% MQTT cargado (admin por comandos)", 'info');
+        addSystemLog("🚀 Panel HÍBRIDO (MQTT+HTTP) cargado. Timeout de comandos = 10s.", 'info');
+        setTimeout(() => {
+            if (!mqttConnected && currentMode === 'mqtt' && forcedMode !== 'mqtt') {
+                setMode('http');
+            }
+        }, 5000);
     </script>
 </body>
 </html>
