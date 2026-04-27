@@ -27,9 +27,9 @@
             --flame-normal: #FFA726;
             --flame-danger: #FF3D00;
             --danger-glow: rgba(255, 61, 0, 0.6);
-            --color-firmware: #7AF0D4;   /* cambiado a celeste */
-            --color-littlefs: #FFA726;
-            --color-free: #7AF0D4;       /* también celeste */
+            --color-firmware: #7AF0D4;   /* celeste */
+            --color-littlefs: #FFA726;   /* naranja */
+            --color-free: rgba(0, 0, 0, 0.4); /* gris oscuro (mismo fondo que la barra RAM) */
             --status-online: #2e7d32;
             --status-offline: #c62828;
         }
@@ -1226,7 +1226,7 @@
         // Arranque
         fetchEstado();
         setInterval(fetchEstado, 2000);
-        addSystemLog("🚀 Panel Modo AP cargado - Colores de flash actualizados + mDNS", 'info');
+        addSystemLog("🚀 Panel Modo AP cargado - Colores de flash corregidos (libre en gris oscuro) + mDNS", 'info');
     </script>
 </body>
 </html>
