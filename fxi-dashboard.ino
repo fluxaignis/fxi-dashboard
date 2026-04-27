@@ -480,6 +480,16 @@ void setup() {
 
   // Inicializar el temporizador para OTA periódico
   ultimoChequeoOTA = millis();
+
+  // --- Mostrar ayuda por Serial ---
+  Serial.println("\n=== Comandos disponibles por Serial ===");
+  Serial.println("  help      - Muestra esta ayuda");
+  Serial.println("  update_fw - Forzar actualización OTA del firmware (código)");
+  Serial.println("  fw        - (abreviatura)");
+  Serial.println("  update_html - Forzar actualización del archivo HTML");
+  Serial.println("  html      - (abreviatura)");
+  Serial.println("  restart   - Reiniciar el ESP32");
+  Serial.println("========================================\n");
 }
 
 // ==================== LOOP PRINCIPAL ====================
@@ -487,6 +497,31 @@ void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
   ArduinoOTA.handle();
+
+  // ---- PROCESAR COMANDOS POR SERIAL ----
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    cmd.toLowerCase();
+    if (cmd.length() > 0) {
+      addLog("info", "Comando serial recibido: " + cmd);
+      if (cmd == "help") {
+        Serial.println("Comandos: update_fw, fw, update_html, html, restart, help");
+      } else if (cmd == "update_fw" || cmd == "fw") {
+        Serial.println("Forzando actualización OTA del firmware...");
+        chequearActualizacionGitHub();
+      } else if (cmd == "update_html" || cmd == "html") {
+        Serial.println("Forzando actualización del HTML...");
+        actualizarHTML();
+      } else if (cmd == "restart") {
+        Serial.println("Reiniciando ESP32 en 1 segundo...");
+        delay(1000);
+        ESP.restart();
+      } else {
+        Serial.println("Comando no reconocido. Usa 'help' para ver opciones.");
+      }
+    }
+  }
 
   // MQTT
   if (WiFi.status() == WL_CONNECTED) {
