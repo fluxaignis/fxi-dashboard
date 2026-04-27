@@ -14,8 +14,8 @@
 #include <HTTPUpdate.h>
 #include <ArduinoJson.h>
 
-// ==================== BUFFER DE LOGS ====================
-#define MAX_LOGS 50
+// ==================== BUFFER DE LOGS (MEJORADO) ====================
+#define MAX_LOGS 30   // Reducido de 50 a 30 para acelerar la respuesta MQTT
 struct LogEntry {
   unsigned long timestamp;
   String level;
@@ -26,6 +26,8 @@ int logIndex = 0;
 int logCount = 0;
 
 void addLog(String level, String message) {
+  // Truncar mensajes demasiado largos (más de 100 caracteres)
+  if (message.length() > 100) message = message.substring(0, 97) + "...";
   logBuffer[logIndex].timestamp = millis();
   logBuffer[logIndex].level = level;
   logBuffer[logIndex].message = message;
@@ -38,7 +40,7 @@ void addLog(String level, String message) {
 String FIRMWARE_VERSION = "AUTO_VERSION";
 const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/version.txt";
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/firmware.bin";
-const char* urlHTML = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/esp32/index.html";
+const char* urlHTML = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/index.html";
 
 unsigned long ultimoChequeoOTA = 0;
 const unsigned long INTERVALO_OTA = 60001;      // 1 minuto (pruebas). Cambiar a 3600000 en producción
@@ -133,7 +135,7 @@ void detenerRutina() {
   addLog("info", "Rutina detenida.");
 }
 
-// ==================== NUEVO MQTT ADMIN: MANEJADOR DE COMANDOS ====================
+// ==================== MQTT ADMIN: MANEJADOR DE COMANDOS ====================
 void respondAdminCommand(int id, bool success, JsonDocument &data, const String &errorMsg = "") {
   if (!client.connected()) return;
   DynamicJsonDocument resp(1024);
@@ -170,7 +172,8 @@ void processAdminCommand(int id, const String &action) {
         respondAdminCommand(id, true, data);
     }
     else if (action == "get_logs") {
-        DynamicJsonDocument data(4096);  // Tamaño aumentado
+        // Buffer aumentado a 6144 bytes para evitar desbordamiento
+        DynamicJsonDocument data(6144);
         JsonArray logs = data.createNestedArray("logs");
         int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
         for (int i = 0; i < logCount; i++) {
@@ -223,7 +226,7 @@ void processAdminCommand(int id, const String &action) {
     }
 }
 
-// ==================== CALLBACK MQTT (ampliado) ====================
+// ==================== CALLBACK MQTT ====================
 void callback(char* topic, byte* payload, unsigned int length) {
   String msg = "";
   for (int i = 0; i < length; i++) msg += (char)payload[i];
@@ -244,7 +247,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
       addLog("info", "Simulación DESACTIVADA");
     }
   }
-  // === NUEVO: comandos de administración MQTT ===
   else if (topicStr == "fxi/admin/cmd") {
     DynamicJsonDocument doc(256);
     DeserializationError error = deserializeJson(doc, msg);
@@ -262,7 +264,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-// ==================== MANEJADORES WEB (sin cambios) ====================
+// ==================== MANEJADORES WEB ====================
 void handleRoot() {
   File file = LittleFS.open("/index.html", "r");
   if (!file) {
@@ -371,7 +373,7 @@ void handleCmd() {
   }
 }
 
-// ==================== ACTUALIZACIONES (OTA y HTML) - sin cambios ====================
+// ==================== ACTUALIZACIONES (OTA y HTML) ====================
 void guardarVersion(String version) {
   File f = LittleFS.open("/version.txt", "w");
   if (f) {
@@ -424,6 +426,7 @@ bool actualizarHTML() {
   addLog("info", "HTML actualizado correctamente (forzado)");
   return true;
 }
+
 bool isNewerVersion(String remote, String current) {
   remote.replace("v", "");
   current.replace("v", "");
@@ -606,7 +609,7 @@ void loop() {
       if (client.connect("ESP32_FXI", "Admin", "FluxaIgnis2026")) {
         client.subscribe("fxi/comandos");
         client.subscribe("fxi/simular");
-        client.subscribe("fxi/admin/cmd");  // suscripción al topic de administración
+        client.subscribe("fxi/admin/cmd");
         addLog("info", "MQTT conectado (incluyendo admin)");
       }
     } else {
