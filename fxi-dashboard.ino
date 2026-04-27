@@ -430,12 +430,16 @@ void setup() {
   dnsServer.start(53, "*", apIP);
   addLog("info", "DNS Captive Portal activado");
 
-  // mDNS
-  if (MDNS.begin("fluxaignis_prueba")) {
-    addLog("info", "mDNS iniciado: fluxaignis.local");
+  // ========== CONFIGURACIÓN mDNS (CORREGIDA) ==========
+  if (MDNS.begin("fluxaignis")) {
+    addLog("info", "✅ mDNS iniciado correctamente como fluxaignis.local");
     MDNS.addService("http", "tcp", 80);
+    // Mostrar la IP para verificar
+    Serial.print("Dirección IP del ESP32: ");
+    Serial.println(WiFi.localIP());
+    Serial.println("Ahora puedes acceder a http://fluxaignis.local");
   } else {
-    addLog("warn", "Error al iniciar mDNS");
+    addLog("error", "❌ Error al iniciar mDNS");
   }
 
   // WiFi externo
@@ -453,17 +457,17 @@ void setup() {
     client.setServer(mqtt_server, 8883);
     client.setCallback(callback);
 
-    // 👇 COMPROBAR ACTUALIZACIÓN NADA MÁS CONECTARSE
+    // COMPROBAR ACTUALIZACIÓN NADA MÁS CONECTARSE
     chequearActualizacionGitHub();
   } else {
     addLog("warn", "No se pudo conectar a red externa. Modo offline + hotspot.");
   }
 
-  // ArduinoOTA (clásico)
+  // ArduinoOTA (clásico) - este nombre no interfiere con el mDNS principal
   ArduinoOTA.setHostname("fluxaignis_ota");
   ArduinoOTA.setPassword("12345678");
   ArduinoOTA.begin();
-  addLog("info", "OTA clásico iniciado.");
+  addLog("info", "OTA clásico iniciado (hostname: fluxaignis_ota).");
 
   // Servidor web
   server.on("/", handleRoot);
@@ -476,7 +480,7 @@ void setup() {
   server.onNotFound(handleNotFound);
   server.begin();
 
-  addLog("info", "Servidor web listo. Accede a http://192.168.1.1");
+  addLog("info", "Servidor web listo. Accede a http://192.168.1.1 o http://fluxaignis.local");
 
   // Inicializar el temporizador para OTA periódico
   ultimoChequeoOTA = millis();
@@ -497,6 +501,9 @@ void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
   ArduinoOTA.handle();
+
+  // Mantener vivo el servicio mDNS
+  MDNS.update();
 
   // ---- PROCESAR COMANDOS POR SERIAL ----
   if (Serial.available()) {
