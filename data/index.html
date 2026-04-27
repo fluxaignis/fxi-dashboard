@@ -30,6 +30,8 @@
             --color-firmware: #3F51B5;
             --color-littlefs: #FFA726;
             --color-free: #7AF0D4;
+            --status-online: #2e7d32;
+            --status-offline: #c62828;
         }
         body.light-mode {
             --bg-start: #E0F2F1;
@@ -156,6 +158,7 @@
             text-align: center;
             width: 100%;
             font-size: 14px;
+            box-sizing: border-box;
         }
         .btn-glass:hover {
             background: rgba(122, 240, 212, 0.15);
@@ -180,6 +183,21 @@
         .btn-servo:hover {
             background: rgba(122,240,212,0.1);
             transform: translateY(-2px);
+        }
+        /* Badge de estado */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+            background-color: var(--status-online);
+            margin-left: 8px;
+            text-transform: uppercase;
+        }
+        .status-badge.offline {
+            background-color: var(--status-offline);
         }
         .flame-card { text-align: center; cursor: pointer; }
         .flame-icon {
@@ -410,6 +428,7 @@
             margin-bottom: 8px;
             text-decoration: underline;
         }
+        /* Modal mejorado */
         .modal {
             display: none;
             position: fixed;
@@ -436,12 +455,20 @@
         .modal-content h3 { margin-top: 0; color: var(--accent-cyan); }
         .modal-content input {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             margin: 12px 0;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 28px;
             color: var(--text-main);
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+        .modal-content input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 8px var(--accent-cyan);
         }
         .modal-buttons {
             display: flex;
@@ -449,13 +476,24 @@
             justify-content: flex-end;
         }
         .modal-buttons button {
-            padding: 6px 16px;
-            border-radius: 30px;
+            padding: 8px 20px;
+            border-radius: 40px;
             border: none;
             cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
         }
-        .modal-buttons button:first-child { background: var(--accent-blue); color: #0B3954; }
-        .modal-buttons button:last-child { background: var(--chart-pink); color: white; }
+        .modal-buttons button:first-child {
+            background: var(--accent-cyan);
+            color: #0B3954;
+        }
+        .modal-buttons button:last-child {
+            background: var(--chart-pink);
+            color: white;
+        }
+        .modal-buttons button:hover {
+            transform: scale(1.02);
+        }
         .toast {
             position: fixed;
             bottom: 25px;
@@ -495,7 +533,7 @@
             <div>
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <span style="font-weight: 600;">Módulo ESP32</span>
-                    <span id="esp-status">Online</span>
+                    <span id="esp-status" class="status-badge">Online</span>
                 </div>
                 <div style="font-size: 11px; color: var(--text-sec);">Sistema Activo (Modo AP)</div>
             </div>
@@ -580,7 +618,7 @@
                         <div class="card-title">Barrido de Radar</div>
                         <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
                     </div>
-                    <div class="glass-card" style="cursor: pointer;" onclick="location.reload()">
+                    <div class="glass-card" style="cursor: pointer;" id="reconnectBtn">
                         <div class="btn-glass">🔄 Reconectar Sistema</div>
                     </div>
                     <div class="glass-card" style="cursor: pointer;" id="resetAlertBtnSquare">
@@ -588,7 +626,7 @@
                     </div>
                 </div>
 
-                <!-- Panel de Administración completo (funcional vía HTTP) -->
+                <!-- Panel de Administración completo -->
                 <div class="glass-card admin-card" id="adminCard">
                     <div class="admin-reduced">
                         <span>🔐</span>
@@ -669,7 +707,7 @@
         <div class="modal-content">
             <h3 id="modalTitle">Acceso restringido</h3>
             <div id="modalBody">Contraseña de administrador:</div>
-            <input type="password" id="modalInput" placeholder="Contraseña">
+            <input type="password" id="modalInput" placeholder="Contraseña" autocomplete="off">
             <div class="modal-buttons">
                 <button id="modalConfirm">Confirmar</button>
                 <button id="modalCancel">Cancelar</button>
@@ -715,7 +753,7 @@
         // ========== VARIABLES GLOBALES ==========
         let isDarkMode = true;
         let dangerMode = false;
-        let emergenciaActiva = false;    // simula una alerta activa
+        let emergenciaActiva = false;
         let simulationActive = false;
 
         let tempHistory = [];
@@ -729,11 +767,10 @@
         let pingHistory = [];
         let showTimestamps = false;
 
-        // Umbrales de desactivación (similares al ESP)
         const UMBRAL_DESACTIVACION_CRITICA = 38.0;
         const UMBRAL_DESACTIVACION_FUEGO = 35.0;
 
-        // ========== FUNCIONES DE UI (alertas, logs, etc.) ==========
+        // ========== FUNCIONES DE UI ==========
         function setDangerMode(active, motivo = "") {
             if (active === dangerMode) return;
             dangerMode = active;
@@ -778,7 +815,7 @@
             if (logDiv.children.length > 120) logDiv.removeChild(logDiv.lastChild);
         }
 
-        // ========== GRÁFICO SVG (tendencias) ==========
+        // ========== GRÁFICO SVG ==========
         function drawSVG() {
             const pointsCount = Math.min(tempHistory.length, currentPoints);
             if (pointsCount < 2) return;
@@ -819,7 +856,7 @@
             drawSVG();
         }
 
-        // ========== ACTUALIZACIÓN UI (desde /estado) ==========
+        // ========== ACTUALIZACIÓN UI DESDE /estado ==========
         function actualizarTemperatura(temp) {
             const tempVal = parseFloat(temp);
             document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
@@ -837,7 +874,7 @@
                     if (tempVal < UMBRAL_DESACTIVACION_FUEGO) {
                         setDangerMode(false, "");
                         emergenciaActiva = false;
-                        addSystemLog(`Alerta desactivada: temperatura < ${UMBRAL_DESACTIVACION_FUEGO}°C`);
+                        addSystemLog(`Alerta desactivada: temp < ${UMBRAL_DESACTIVACION_FUEGO}°C`);
                     }
                 } else {
                     if (tempVal < UMBRAL_DESACTIVACION_CRITICA) {
@@ -866,7 +903,6 @@
             else el.style.color = '#F06292';
         }
 
-        // ========== OBTENER DATOS DEL ESP32 ==========
         async function fetchEstado() {
             try {
                 const response = await fetch('/estado');
@@ -876,16 +912,19 @@
                 actualizarHumedad(data.hum);
                 actualizarRSSI(data.rssi);
                 addDataPoint(data.temp, data.hum);
-                document.getElementById('esp-status').innerText = 'Online';
-                document.getElementById('esp-status').style.background = 'var(--chart-green)';
+                const statusSpan = document.getElementById('esp-status');
+                statusSpan.innerText = 'Online';
+                statusSpan.classList.remove('offline');
+                statusSpan.classList.add('status-badge');
             } catch(err) {
                 console.log("Error fetchEstado:", err);
-                document.getElementById('esp-status').innerText = 'Error';
-                document.getElementById('esp-status').style.background = 'var(--chart-pink)';
+                const statusSpan = document.getElementById('esp-status');
+                statusSpan.innerText = 'Error';
+                statusSpan.classList.add('offline');
             }
         }
 
-        // ========== CONTROL DEL SERVO (HTTP) ==========
+        // ========== CONTROL DEL SERVO ==========
         async function toggleServo() {
             const btn = document.getElementById('btn-servo');
             btn.innerText = "ENVIANDO...";
@@ -913,7 +952,7 @@
             }
         }
 
-        // ========== FUNCIONES HTTP DEL PANEL ADMIN ==========
+        // ========== FUNCIONES ADMIN (HTTP) ==========
         async function sendCommand(cmd) {
             if (!adminAuthenticated) {
                 showToast("Accede al panel de admin primero", true);
@@ -964,7 +1003,6 @@
                 const uptime = info.uptime || 0;
                 const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
                 const totalKB = 1992 + 128;
-                const freeKB = totalKB - usedKB;
                 document.getElementById('statsGrid').innerHTML = `
                     <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${info.firmware || '--'}</div></div>
                     <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
@@ -1008,9 +1046,7 @@
                     entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
                     logDiv.appendChild(entry);
                 });
-            } catch(e) {
-                // Silencio
-            }
+            } catch(e) {}
         }
 
         async function measurePing() {
@@ -1051,7 +1087,7 @@
             ctx.stroke();
         }
 
-        // ========== ADMIN PANEL (autenticación) ==========
+        // ========== ADMIN PANEL ==========
         const adminCard = document.getElementById('adminCard');
         const closeAdminBtn = document.getElementById('closeAdmin');
 
@@ -1093,7 +1129,7 @@
             measurePing();
         }
 
-        // ========== INICIALIZACIÓN DE BOTONES Y EVENTOS ==========
+        // ========== INICIALIZACIÓN ==========
         document.querySelectorAll('.range-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
@@ -1105,9 +1141,10 @@
         document.querySelector('.range-btn[data-points="20"]').classList.add('active');
 
         document.getElementById('resetAlertBtnSquare').addEventListener('click', resetAlertaForzado);
+        document.getElementById('reconnectBtn').addEventListener('click', () => location.reload());
         document.getElementById('btn-servo').addEventListener('click', toggleServo);
 
-        // Acciones rápidas (HTTP)
+        // Acciones rápidas
         const actions = [
             { icon: "🔄", label: "Reiniciar ESP32", cmd: "restart" },
             { icon: "🔍", label: "Comprobar OTA", cmd: "check_ota" },
@@ -1141,7 +1178,6 @@
             });
         }
 
-        // Panel admin eventos
         adminCard.addEventListener('click', (e) => {
             if (e.target === closeAdminBtn || e.target.parentElement === closeAdminBtn) { collapseAdmin(); return; }
             if (!adminCard.classList.contains('expanded')) expandAdmin();
@@ -1164,7 +1200,7 @@
             document.getElementById('toggleTimestampBtn').innerText = showTimestamps ? "Ocultar timestamps" : "Mostrar timestamps";
         });
 
-        // Tema oscuro/claro y partículas
+        // Tema y partículas
         const themeBtn = document.getElementById('theme-toggle');
         themeBtn.onclick = () => {
             isDarkMode = !isDarkMode;
@@ -1191,7 +1227,7 @@
         // Arranque
         fetchEstado();
         setInterval(fetchEstado, 2000);
-        addSystemLog("🚀 Panel Modo AP cargado - Admin abajo, sin apretujamiento", 'info');
+        addSystemLog("🚀 Panel Modo AP cargado - Interfaz corregida", 'info');
     </script>
 </body>
 </html>
