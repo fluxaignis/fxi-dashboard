@@ -344,6 +344,23 @@ bool actualizarHTML() {
   return true;
 }
 
+// Función para comparar versiones semánticas (formato x.y.z)
+bool isNewerVersion(String remote, String current) {
+  remote.trim();
+  current.trim();
+  remote.replace("v", "");
+  current.replace("v", "");
+  int rMajor = 0, rMinor = 0, rPatch = 0;
+  int cMajor = 0, cMinor = 0, cPatch = 0;
+  sscanf(remote.c_str(), "%d.%d.%d", &rMajor, &rMinor, &rPatch);
+  sscanf(current.c_str(), "%d.%d.%d", &cMajor, &cMinor, &cPatch);
+  if (rMajor > cMajor) return true;
+  if (rMajor < cMajor) return false;
+  if (rMinor > cMinor) return true;
+  if (rMinor < cMinor) return false;
+  return (rPatch > cPatch);
+}
+
 void chequearActualizacionGitHub() {
   if (WiFi.status() != WL_CONNECTED) {
     addLog("warn", "Sin conexión WiFi externa. Se omite chequeo OTA de GitHub.");
@@ -364,8 +381,9 @@ void chequearActualizacionGitHub() {
     String currentVersion = leerVersion();
     addLog("info", "Versión actual: " + currentVersion + " | GitHub: " + versionGitHub);
 
-    if (versionGitHub != currentVersion && versionGitHub.length() > 0) {
-      addLog("info", "¡Nueva versión detectada! Iniciando OTA...");
+    // Comparación semántica: solo actualizar si la versión remota es mayor
+    if (isNewerVersion(versionGitHub, currentVersion) && versionGitHub.length() > 0) {
+      addLog("info", "¡Nueva versión disponible! Iniciando OTA...");
       httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
       t_httpUpdate_return ret = httpUpdate.update(espClient, urlFirmware);
 
@@ -384,7 +402,7 @@ void chequearActualizacionGitHub() {
           break;
       }
     } else {
-      addLog("info", "El firmware ya está en la última versión.");
+      addLog("info", "El firmware ya está en la última versión (o la versión remota es anterior).");
     }
   } else {
     addLog("error", "Error al consultar versión en GitHub. Código: " + String(httpCode));
@@ -434,7 +452,6 @@ void setup() {
   if (MDNS.begin("fluxaignis")) {
     addLog("info", "✅ mDNS iniciado correctamente como fluxaignis.local");
     MDNS.addService("http", "tcp", 80);
-    // Mostrar la IP para verificar
     Serial.print("Dirección IP del ESP32: ");
     Serial.println(WiFi.localIP());
     Serial.println("Ahora puedes acceder a http://fluxaignis.local");
