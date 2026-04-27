@@ -94,7 +94,7 @@ const long gmtOffset_sec = -14400;
 const int daylightOffset_sec = 0;
 
 // ==================== CONFIGURACIÓN DEL PUNTO DE ACCESO ====================
-const char* ap_ssid = "FLUXA IGNIS";
+const char* ap_ssid = "FLUXAIGNIS TECH";
 const char* ap_password = "";
 IPAddress apIP(192, 168, 1, 1);
 IPAddress apGateway(192, 168, 1, 1);
