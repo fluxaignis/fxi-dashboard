@@ -346,14 +346,12 @@ bool actualizarHTML() {
 
 // Función para comparar versiones semánticas (formato x.y.z)
 bool isNewerVersion(String remote, String current) {
-  remote.trim();
-  current.trim();
   remote.replace("v", "");
   current.replace("v", "");
-  int rMajor = 0, rMinor = 0, rPatch = 0;
-  int cMajor = 0, cMinor = 0, cPatch = 0;
-  sscanf(remote.c_str(), "%d.%d.%d", &rMajor, &rMinor, &rPatch);
-  sscanf(current.c_str(), "%d.%d.%d", &cMajor, &cMinor, &cPatch);
+  int rMajor, rMinor, rPatch;
+  int cMajor, cMinor, cPatch;
+  if (sscanf(remote.c_str(), "%d.%d.%d", &rMajor, &rMinor, &rPatch) != 3) return false;
+  if (sscanf(current.c_str(), "%d.%d.%d", &cMajor, &cMinor, &cPatch) != 3) return true; // asumir que remota es nueva si la local es inválida
   if (rMajor > cMajor) return true;
   if (rMajor < cMajor) return false;
   if (rMinor > cMinor) return true;
@@ -381,9 +379,8 @@ void chequearActualizacionGitHub() {
     String currentVersion = leerVersion();
     addLog("info", "Versión actual: " + currentVersion + " | GitHub: " + versionGitHub);
 
-    // Comparación semántica: solo actualizar si la versión remota es mayor
     if (isNewerVersion(versionGitHub, currentVersion) && versionGitHub.length() > 0) {
-      addLog("info", "¡Nueva versión disponible! Iniciando OTA...");
+      addLog("info", "¡Nueva versión detectada! Iniciando OTA...");
       httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
       t_httpUpdate_return ret = httpUpdate.update(espClient, urlFirmware);
 
@@ -402,7 +399,7 @@ void chequearActualizacionGitHub() {
           break;
       }
     } else {
-      addLog("info", "El firmware ya está en la última versión (o la versión remota es anterior).");
+      addLog("info", "El firmware ya está en la última versión (o la remota es menor).");
     }
   } else {
     addLog("error", "Error al consultar versión en GitHub. Código: " + String(httpCode));
@@ -448,7 +445,7 @@ void setup() {
   dnsServer.start(53, "*", apIP);
   addLog("info", "DNS Captive Portal activado");
 
-  // ========== CONFIGURACIÓN mDNS (CORREGIDA) ==========
+  // Configuración mDNS (sin .update en el loop)
   if (MDNS.begin("fluxaignis")) {
     addLog("info", "✅ mDNS iniciado correctamente como fluxaignis.local");
     MDNS.addService("http", "tcp", 80);
@@ -480,7 +477,7 @@ void setup() {
     addLog("warn", "No se pudo conectar a red externa. Modo offline + hotspot.");
   }
 
-  // ArduinoOTA (clásico) - este nombre no interfiere con el mDNS principal
+  // ArduinoOTA (clásico)
   ArduinoOTA.setHostname("fluxaignis_ota");
   ArduinoOTA.setPassword("12345678");
   ArduinoOTA.begin();
@@ -519,8 +516,8 @@ void loop() {
   server.handleClient();
   ArduinoOTA.handle();
 
-  // Mantener vivo el servicio mDNS
-  MDNS.update();
+  // NOTA: No usamos MDNS.update() porque en esta versión de ESPmDNS no existe.
+  // El servicio mDNS se mantiene automáticamente.
 
   // ---- PROCESAR COMANDOS POR SERIAL ----
   if (Serial.available()) {
