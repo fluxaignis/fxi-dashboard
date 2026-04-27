@@ -150,77 +150,77 @@ void respondAdminCommand(int id, bool success, JsonDocument &data, const String 
 }
 
 void processAdminCommand(int id, const String &action) {
-  addLog("info", "Comando MQTT admin: " + action + " (id=" + String(id) + ")");
+    addLog("info", "Comando MQTT admin: " + action + " (id=" + String(id) + ")");
 
-  if (action == "get_stats") {
-    DynamicJsonDocument data(512);
-    data["firmware"] = FIRMWARE_VERSION;
-    data["uptime"] = millis() / 1000;
-    size_t heapTotal = ESP.getHeapSize();
-    size_t heapFree = ESP.getFreeHeap();
-    data["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
-    data["littlefs_percent"] = 30;
-    size_t sketchSize = ESP.getSketchSize();
-    size_t sketchTotal = 1992294;
-    data["sketch_percent"] = (sketchSize * 100) / sketchTotal;
-    data["ip_ap"] = WiFi.softAPIP().toString();
-    data["ip_sta"] = WiFi.localIP().toString();
-    data["mqtt_status"] = client.connected() ? "conectado" : "desconectado";
-    data["mdns"] = "fluxaignis.local";
-    respondAdminCommand(id, true, data);
-  }
-  else if (action == "get_logs") {
-    DynamicJsonDocument data(2048);
-    JsonArray logs = data.createNestedArray("logs");
-    int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
-    for (int i = 0; i < logCount; i++) {
-      int idx = (start + i) % MAX_LOGS;
-      JsonObject entry = logs.createNestedObject();
-      entry["timestamp"] = logBuffer[idx].timestamp;
-      entry["level"] = logBuffer[idx].level;
-      entry["message"] = logBuffer[idx].message;
+    if (action == "get_stats") {
+        DynamicJsonDocument data(512);
+        data["firmware"] = FIRMWARE_VERSION;
+        data["uptime"] = millis() / 1000;
+        size_t heapTotal = ESP.getHeapSize();
+        size_t heapFree = ESP.getFreeHeap();
+        data["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
+        data["littlefs_percent"] = 30;
+        size_t sketchSize = ESP.getSketchSize();
+        size_t sketchTotal = 1992294;
+        data["sketch_percent"] = (sketchSize * 100) / sketchTotal;
+        data["ip_ap"] = WiFi.softAPIP().toString();
+        data["ip_sta"] = WiFi.localIP().toString();
+        data["mqtt_status"] = client.connected() ? "conectado" : "desconectado";
+        data["mdns"] = "fluxaignis.local";
+        respondAdminCommand(id, true, data);
     }
-    respondAdminCommand(id, true, data);
-  }
-  else if (action == "restart") {
-    DynamicJsonDocument empty(64);
-    respondAdminCommand(id, true, empty);
-    delay(100);
-    ESP.restart();
-  }
-  else if (action == "update_fw") {
-    DynamicJsonDocument empty(64);
-    respondAdminCommand(id, true, empty);
-    chequearActualizacionGitHub();
-  }
-  else if (action == "update_html") {
-    DynamicJsonDocument empty(64);
-    respondAdminCommand(id, true, empty);
-    actualizarHTML();
-  }
-  else if (action == "toggle_sim") {
-    simularFuego = !simularFuego;
-    DynamicJsonDocument data(32);
-    data["simulating"] = simularFuego;
-    respondAdminCommand(id, true, data);
-    addLog("warn", simularFuego ? "Simulación de fuego ACTIVADA por MQTT admin" : "Simulación DESACTIVADA por MQTT admin");
-  }
-  else if (action == "clear_logs") {
-    logIndex = 0;
-    logCount = 0;
-    DynamicJsonDocument empty(64);
-    respondAdminCommand(id, true, empty);
-    addLog("info", "Logs limpiados por comando MQTT admin");
-  }
-  else if (action == "ping") {
-    DynamicJsonDocument data(32);
-    data["pong"] = true;
-    respondAdminCommand(id, true, data);
-  }
-  else {
-    DynamicJsonDocument empty(64);
-    respondAdminCommand(id, false, empty, "Unknown action: " + action);
-  }
+    else if (action == "get_logs") {
+        DynamicJsonDocument data(4096);  // Tamaño aumentado
+        JsonArray logs = data.createNestedArray("logs");
+        int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
+        for (int i = 0; i < logCount; i++) {
+            int idx = (start + i) % MAX_LOGS;
+            JsonObject entry = logs.createNestedObject();
+            entry["timestamp"] = logBuffer[idx].timestamp;
+            entry["level"] = logBuffer[idx].level;
+            entry["message"] = logBuffer[idx].message;
+        }
+        respondAdminCommand(id, true, data);
+    }
+    else if (action == "restart") {
+        DynamicJsonDocument empty(64);
+        respondAdminCommand(id, true, empty);
+        delay(100);
+        ESP.restart();
+    }
+    else if (action == "update_fw") {
+        DynamicJsonDocument empty(64);
+        respondAdminCommand(id, true, empty);
+        chequearActualizacionGitHub();
+    }
+    else if (action == "update_html") {
+        DynamicJsonDocument empty(64);
+        respondAdminCommand(id, true, empty);
+        actualizarHTML();
+    }
+    else if (action == "toggle_sim") {
+        simularFuego = !simularFuego;
+        DynamicJsonDocument data(32);
+        data["simulating"] = simularFuego;
+        respondAdminCommand(id, true, data);
+        addLog("warn", simularFuego ? "Simulación de fuego ACTIVADA por MQTT admin" : "Simulación DESACTIVADA por MQTT admin");
+    }
+    else if (action == "clear_logs") {
+        logIndex = 0;
+        logCount = 0;
+        DynamicJsonDocument empty(64);
+        respondAdminCommand(id, true, empty);
+        addLog("info", "Logs limpiados por comando MQTT admin");
+    }
+    else if (action == "ping") {
+        DynamicJsonDocument data(32);
+        data["pong"] = true;
+        respondAdminCommand(id, true, data);
+    }
+    else {
+        DynamicJsonDocument empty(64);
+        respondAdminCommand(id, false, empty, "Unknown action: " + action);
+    }
 }
 
 // ==================== CALLBACK MQTT (ampliado) ====================
