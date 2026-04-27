@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FXI Panel de control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>FXI Panel de control - Modo AP</title>
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="apple-touch-icon" href="favicon-192x192.png">
     <link rel="manifest" href="manifest.json">
@@ -49,10 +49,14 @@
             overflow-x: hidden;
             transition: background 0.5s ease;
         }
+        body.danger-alert .glass-card {
+            box-shadow: 0 0 15px var(--danger-glow), 0 0 30px rgba(255, 61, 0, 0.3);
+            border-color: var(--flame-danger);
+            transition: all 0.3s ease;
+        }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
         ::-webkit-scrollbar-thumb { background: var(--accent-cyan); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
         #weather-canvas {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 0; pointer-events: none;
@@ -93,12 +97,7 @@
             flex-direction: column;
             gap: 25px;
         }
-        /* Nueva estructura: dos columnas dentro del área derecha */
-        .right-wrapper {
-            display: grid;
-            grid-template-columns: 1fr 1.2fr;
-            gap: 20px;
-        }
+        /* Cuadrícula para los cuadros pequeños (2 columnas) */
         .right-small-cards {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -108,23 +107,24 @@
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             border-radius: 28px;
-            padding: 25px;
+            padding: 22px;
             backdrop-filter: blur(15px);
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
         }
         .glass-card:hover { transform: translateY(-5px); }
         .card-title {
-            font-size: 12px; font-weight: 600;
+            font-size: 11px; font-weight: 600;
             text-transform: uppercase;
             color: var(--text-sec);
             margin-bottom: 10px;
+            letter-spacing: 1px;
         }
-        .val-big { font-size: clamp(40px, 8vw, 64px); font-weight: 200; }
-        .val-med { font-size: 32px; font-weight: 500; }
-        .unit { font-size: 16px; opacity: 0.7; }
+        .val-big { font-size: clamp(38px, 7vw, 58px); font-weight: 200; }
+        .val-med { font-size: 28px; font-weight: 500; }
+        .unit { font-size: 14px; opacity: 0.7; }
         .chart-container {
-            height: 120px;
+            height: 110px;
             display: flex;
             align-items: flex-end;
             justify-content: space-around;
@@ -133,8 +133,8 @@
         .bar-group { width: 35px; text-align: center; }
         .bar-bg {
             height: 80px;
-            background: rgba(0,0,0,0.1);
-            border-radius: 6px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
             display: flex;
             align-items: flex-end;
             overflow: hidden;
@@ -143,48 +143,34 @@
             width: 100%;
             transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .btn-square {
-            background: var(--accent-blue);
-            color: #0B3954;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 50px;
+        /* Estilo unificado para botones tipo "Barrido de Radar" */
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 12px 18px;
+            border-radius: 18px;
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
             text-align: center;
+            width: 100%;
+            font-size: 14px;
         }
-        .btn-reset {
-            background: var(--chart-pink);
-            color: white;
-        }
-        .btn-square:hover { transform: translateY(-2px); }
-        #esp-status {
-            font-size: 10px;
-            padding: 3px 8px;
-            border-radius: 10px;
-            background: var(--chart-green);
-            color: #fff;
-        }
-        @media (max-width: 850px) {
-            .dashboard-grid { grid-template-columns: 1fr; }
-            .right-wrapper { grid-template-columns: 1fr; }
-            .right-small-cards { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 480px) {
-            .right-small-cards { grid-template-columns: 1fr; }
-            .header { flex-direction: column; align-items: flex-start; }
-            #theme-toggle { margin-left: 0; }
+        .btn-glass:hover {
+            background: rgba(122, 240, 212, 0.15);
+            transform: translateY(-2px);
         }
         .btn-servo {
             background: rgba(255,255,255,0.05);
             border: 2px solid var(--accent-cyan);
             color: var(--accent-cyan);
-            padding: 10px 20px;
-            border-radius: 15px;
+            padding: 10px 18px;
+            border-radius: 18px;
             cursor: pointer;
             width: 100%;
             transition: all 0.3s;
+            font-weight: 800;
         }
         .btn-servo.active {
             background: var(--accent-cyan);
@@ -197,7 +183,7 @@
         }
         .flame-card { text-align: center; cursor: pointer; }
         .flame-icon {
-            font-size: 70px;
+            font-size: 68px;
             transition: all 0.3s ease;
             filter: drop-shadow(0 0 5px rgba(0,0,0,0.3));
         }
@@ -212,31 +198,30 @@
         }
         @keyframes pulse {
             0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+            50% { transform: scale(1.08); }
             100% { transform: scale(1); }
         }
         .flame-status {
             font-size: 18px;
             font-weight: bold;
-            margin-top: 10px;
+            margin-top: 8px;
         }
         .chart-wrapper {
-            height: 220px;
             margin-top: 15px;
             background: rgba(0,0,0,0.2);
-            border-radius: 12px;
-            padding: 10px;
+            border-radius: 16px;
+            padding: 8px;
         }
         .svg-chart {
             width: 100%;
-            height: 180px;
+            height: 170px;
             background: transparent;
         }
         .range-buttons {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             justify-content: center;
-            margin-top: 15px;
+            margin-top: 12px;
             flex-wrap: wrap;
         }
         .range-btn {
@@ -246,7 +231,7 @@
             padding: 4px 12px;
             border-radius: 20px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 11px;
             transition: all 0.2s;
         }
         .range-btn.active {
@@ -254,7 +239,7 @@
             color: #0B3954;
         }
         .avg-text {
-            font-size: 12px;
+            font-size: 11px;
             text-align: center;
             margin-top: 10px;
             color: var(--text-sec);
@@ -263,7 +248,7 @@
             display: flex;
             gap: 20px;
             justify-content: center;
-            margin-bottom: 8px;
+            margin-bottom: 5px;
             font-size: 11px;
         }
         .legend-temp { color: #F06292; }
@@ -280,7 +265,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 12px;
         }
         .admin-card .admin-expanded {
             display: none;
@@ -292,9 +277,9 @@
             to { opacity: 1; transform: translateY(0); }
         }
         .admin-section {
-            background: rgba(0,0,0,0.2);
+            background: rgba(0,0,0,0.25);
             border-radius: 20px;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
             overflow: hidden;
         }
         .admin-section-header {
@@ -310,10 +295,10 @@
         .admin-section-header:hover { background: rgba(255,255,255,0.08); }
         .admin-section-title {
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             color: var(--accent-cyan);
         }
-        .admin-section-icon { transition: transform 0.3s ease; }
+        .admin-section-icon { transition: transform 0.3s ease; font-size: 12px; }
         .admin-section-content {
             padding: 16px;
             border-top: 1px solid rgba(255,255,255,0.05);
@@ -321,32 +306,31 @@
         }
         .admin-section.open .admin-section-content { display: block; }
         .admin-section.open .admin-section-icon { transform: rotate(90deg); }
-
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 12px;
         }
         .stat-card {
             background: rgba(0,0,0,0.25);
             border-radius: 16px;
-            padding: 12px;
+            padding: 10px;
             text-align: center;
         }
         .stat-label {
-            font-size: 10px;
+            font-size: 9px;
             text-transform: uppercase;
             color: var(--text-sec);
         }
         .stat-value {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
-            margin-top: 5px;
+            margin-top: 4px;
         }
         .progress-bar {
-            background: rgba(0,0,0,0.3);
-            border-radius: 8px;
-            height: 6px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 6px;
+            height: 5px;
             margin-top: 8px;
             overflow: hidden;
         }
@@ -356,9 +340,9 @@
             width: 0%;
         }
         .stacked-bar {
-            background: rgba(0,0,0,0.3);
-            border-radius: 8px;
-            height: 8px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 6px;
+            height: 7px;
             margin-top: 8px;
             display: flex;
             overflow: hidden;
@@ -366,16 +350,15 @@
         .segment-firmware { background-color: var(--color-firmware); height: 100%; }
         .segment-littlefs { background-color: var(--color-littlefs); height: 100%; }
         .segment-free { background-color: var(--color-free); height: 100%; }
-
         .action-blocks {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
             gap: 12px;
         }
         .action-block {
             background: rgba(0,0,0,0.3);
             border-radius: 20px;
-            padding: 12px 8px;
+            padding: 10px 6px;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
@@ -386,20 +369,26 @@
             transform: translateY(-3px);
             border-color: var(--accent-cyan);
         }
-        .action-icon { font-size: 24px; display: block; margin-bottom: 5px; }
-        .action-label { font-size: 12px; }
-
+        .action-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+        .action-label { font-size: 11px; }
+        .ping-graph {
+            background: rgba(0,0,0,0.3);
+            border-radius: 14px;
+            padding: 8px;
+            height: 90px;
+        }
+        #pingCanvas { width: 100%; height: 70px; background: rgba(0,0,0,0.2); border-radius: 12px; }
         .log-container {
             background: rgba(0,0,0,0.4);
             border-radius: 16px;
-            padding: 10px;
-            max-height: 260px;
+            padding: 8px;
+            max-height: 250px;
             overflow-y: auto;
             font-family: monospace;
-            font-size: 12px;
+            font-size: 11px;
         }
         .log-entry {
-            margin: 5px 0;
+            margin: 4px 0;
             padding: 4px 8px;
             border-radius: 8px;
             background: rgba(0,0,0,0.2);
@@ -417,20 +406,10 @@
             border: none;
             color: var(--accent-cyan);
             cursor: pointer;
-            font-size: 11px;
+            font-size: 10px;
             margin-bottom: 8px;
             text-decoration: underline;
         }
-
-        .ping-graph {
-            background: rgba(0,0,0,0.3);
-            border-radius: 16px;
-            padding: 10px;
-            height: 100px;
-        }
-        #pingCanvas { width: 100%; height: 80px; background: rgba(0,0,0,0.2); border-radius: 12px; }
-
-        /* ========== MODAL Y TOAST ========== */
         .modal {
             display: none;
             position: fixed;
@@ -448,26 +427,21 @@
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             border-radius: 28px;
-            padding: 30px;
-            max-width: 400px;
-            width: 90%;
+            padding: 24px;
+            max-width: 360px;
+            width: 85%;
             backdrop-filter: blur(20px);
             box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            animation: fadeInUp 0.3s ease;
         }
-        .modal-content h3 {
-            margin-top: 0;
-            color: var(--accent-cyan);
-        }
+        .modal-content h3 { margin-top: 0; color: var(--accent-cyan); }
         .modal-content input {
             width: 100%;
-            padding: 12px;
-            margin: 15px 0;
+            padding: 10px;
+            margin: 12px 0;
             background: rgba(0,0,0,0.3);
             border: 1px solid var(--glass-border);
             border-radius: 20px;
             color: var(--text-main);
-            font-size: 1rem;
         }
         .modal-buttons {
             display: flex;
@@ -475,41 +449,41 @@
             justify-content: flex-end;
         }
         .modal-buttons button {
-            padding: 8px 20px;
-            border-radius: 40px;
+            padding: 6px 16px;
+            border-radius: 30px;
             border: none;
             cursor: pointer;
-            transition: all 0.2s;
         }
-        .modal-buttons button:first-child {
-            background: var(--accent-blue);
-            color: #0B3954;
-        }
-        .modal-buttons button:last-child {
-            background: var(--chart-pink);
-            color: white;
-        }
+        .modal-buttons button:first-child { background: var(--accent-blue); color: #0B3954; }
+        .modal-buttons button:last-child { background: var(--chart-pink); color: white; }
         .toast {
             position: fixed;
-            bottom: 30px;
+            bottom: 25px;
             left: 50%;
             transform: translateX(-50%);
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
             border: 1px solid var(--accent-cyan);
             color: var(--accent-cyan);
-            padding: 12px 24px;
-            border-radius: 50px;
+            padding: 10px 22px;
+            border-radius: 40px;
             font-weight: bold;
             z-index: 1100;
             opacity: 0;
             transition: opacity 0.3s;
             pointer-events: none;
             white-space: nowrap;
-            font-size: 14px;
+            font-size: 13px;
         }
-        .toast.show {
-            opacity: 1;
+        .toast.show { opacity: 1; }
+        @media (max-width: 850px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .right-small-cards { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 500px) {
+            .right-small-cards { grid-template-columns: 1fr; }
+            .header { flex-direction: column; align-items: flex-start; }
+            #theme-toggle { margin-left: 0; }
         }
     </style>
 </head>
@@ -520,10 +494,10 @@
             <div class="fxi-logo">FLUXA IGNIS</div>
             <div>
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <div style="font-weight: 600;">Módulo ESP32</div>
+                    <span style="font-weight: 600;">Módulo ESP32</span>
                     <span id="esp-status">Online</span>
                 </div>
-                <div style="font-size: 12px; color: var(--text-sec);">Sistema Activo</div>
+                <div style="font-size: 11px; color: var(--text-sec);">Sistema Activo (Modo AP)</div>
             </div>
             <div id="theme-toggle">✳</div>
         </div>
@@ -535,9 +509,9 @@
                     <div>
                         <div class="card-title">Temperatura</div>
                         <div class="val-big" id="temp-val">--<span class="unit">°C</span></div>
-                        <div id="desc-val" style="font-size: 14px; opacity: 0.8;">Esperando datos...</div>
+                        <div id="desc-val" style="font-size: 13px; opacity: 0.8;">Esperando datos...</div>
                     </div>
-                    <div style="font-size: 60px;">🌡️</div>
+                    <div style="font-size: 55px;">🌡️</div>
                 </div>
 
                 <div class="glass-card">
@@ -555,21 +529,21 @@
                 </div>
 
                 <div class="glass-card">
-                    <div class="card-title">Tendencias (Temp / Hum)</div>
+                    <div class="card-title">Tendencias (Temp / Humedad)</div>
                     <div class="legend">
                         <span class="legend-temp">● Temperatura (°C)</span>
                         <span class="legend-hum">● Humedad (%)</span>
                     </div>
                     <div class="chart-wrapper">
-                        <svg id="trendChart" class="svg-chart" viewBox="0 0 600 180" preserveAspectRatio="none">
-                            <line x1="40" y1="160" x2="570" y2="160" stroke="white" stroke-width="1" opacity="0.4"/>
-                            <line x1="40" y1="10" x2="40" y2="160" stroke="white" stroke-width="1" opacity="0.4"/>
+                        <svg id="trendChart" class="svg-chart" viewBox="0 0 600 160" preserveAspectRatio="none">
+                            <line x1="40" y1="145" x2="560" y2="145" stroke="white" stroke-width="1" opacity="0.3"/>
+                            <line x1="40" y1="15" x2="40" y2="145" stroke="white" stroke-width="1" opacity="0.3"/>
                             <polyline id="tempLine" fill="none" stroke="#F06292" stroke-width="2.5" points=""/>
                             <polyline id="humLine" fill="none" stroke="#4FC3F7" stroke-width="2.5" points=""/>
-                            <text x="15" y="165" fill="white" font-size="8" opacity="0.5">0°</text>
-                            <text x="15" y="20" fill="white" font-size="8" opacity="0.5">40°</text>
-                            <text x="580" y="165" fill="white" font-size="8" opacity="0.5">0%</text>
-                            <text x="580" y="20" fill="white" font-size="8" opacity="0.5">100%</text>
+                            <text x="15" y="150" fill="white" font-size="7" opacity="0.5">0°</text>
+                            <text x="15" y="20" fill="white" font-size="7" opacity="0.5">40°</text>
+                            <text x="570" y="150" fill="white" font-size="7" opacity="0.5">0%</text>
+                            <text x="570" y="20" fill="white" font-size="7" opacity="0.5">100%</text>
                         </svg>
                     </div>
                     <div class="range-buttons">
@@ -582,108 +556,105 @@
                 </div>
             </div>
 
-            <!-- Columna derecha: nueva estructura de dos columnas -->
+            <!-- Columna derecha: cuadros pequeños arriba, admin abajo -->
             <div class="right-column">
-                <div class="right-wrapper">
-                    <!-- Columna izquierda de la derecha: cuadros pequeños -->
-                    <div class="right-small-cards">
-                        <div class="glass-card flame-card" style="grid-column: span 2; text-align: center;">
-                            <div class="flame-icon normal" id="flameIcon">🔥</div>
-                            <div class="flame-status" id="flameStatus">Estado: Normal</div>
-                            <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
-                        </div>
-                        <div class="glass-card">
-                            <div class="card-title">Humedad</div>
-                            <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
-                        </div>
-                        <div class="glass-card">
-                            <div class="card-title">Señal RSSI</div>
-                            <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
-                        </div>
-                        <div class="glass-card">
-                            <div class="card-title">Estado Red</div>
-                            <div id="net-status" style="color: var(--accent-cyan);">Conexión directa con ESP32</div>
-                        </div>
-                        <div class="glass-card">
-                            <div class="card-title">Barrido de Radar</div>
-                            <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
-                        </div>
-                        <div class="glass-card" style="display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="location.reload()">
-                            <div class="btn-square" style="width: 100%;">🔄 Reconectar Sistema</div>
-                        </div>
-                        <div class="glass-card" style="display: flex; align-items: center; justify-content: center; cursor: pointer;" id="resetAlertBtnSquare">
-                            <div class="btn-square btn-reset" style="width: 100%;">🔄 Resetear Alerta</div>
-                        </div>
+                <div class="right-small-cards">
+                    <div class="glass-card flame-card" style="grid-column: span 2; text-align: center;">
+                        <div class="flame-icon normal" id="flameIcon">🔥</div>
+                        <div class="flame-status" id="flameStatus">Estado: Normal</div>
+                        <div style="font-size: 11px; opacity: 0.7;">Detección óptica de incendios</div>
                     </div>
+                    <div class="glass-card">
+                        <div class="card-title">Humedad</div>
+                        <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Señal RSSI</div>
+                        <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Estado Red</div>
+                        <div id="net-status" style="color: var(--accent-cyan);">Conexión directa con ESP32</div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Barrido de Radar</div>
+                        <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
+                    </div>
+                    <div class="glass-card" style="cursor: pointer;" onclick="location.reload()">
+                        <div class="btn-glass">🔄 Reconectar Sistema</div>
+                    </div>
+                    <div class="glass-card" style="cursor: pointer;" id="resetAlertBtnSquare">
+                        <div class="btn-glass">🔄 Resetear Alerta</div>
+                    </div>
+                </div>
 
-                    <!-- Columna derecha de la derecha: Panel de Administración -->
-                    <div class="glass-card admin-card" id="adminCard">
-                        <div class="admin-reduced">
-                            <span class="lock-icon">🔐</span>
-                            <span class="admin-title">Panel de Admin</span>
-                            <span class="lock-icon">🔒</span>
+                <!-- Panel de Administración completo (funcional vía HTTP) -->
+                <div class="glass-card admin-card" id="adminCard">
+                    <div class="admin-reduced">
+                        <span>🔐</span>
+                        <span class="admin-title">Panel de Administración</span>
+                        <span>🔒</span>
+                    </div>
+                    <div class="admin-expanded">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div class="card-title">CENTRO DE CONTROL</div>
+                            <span id="closeAdmin" style="cursor:pointer; font-size: 24px;">&times;</span>
                         </div>
-                        <div class="admin-expanded">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                <div class="card-title">CENTRO DE ADMINISTRACIÓN</div>
-                                <span id="closeAdmin" style="cursor:pointer; font-size: 24px;">&times;</span>
+                        <!-- Estadísticas -->
+                        <div class="admin-section open" id="secStats">
+                            <div class="admin-section-header">
+                                <span class="admin-section-title">📊 Estadísticas del Sistema</span>
+                                <span class="admin-section-icon">▶</span>
                             </div>
-                            <!-- 1. Estadísticas -->
-                            <div class="admin-section open" id="secStats">
-                                <div class="admin-section-header">
-                                    <span class="admin-section-title">📊 Estadísticas del Sistema</span>
-                                    <span class="admin-section-icon">▶</span>
-                                </div>
-                                <div class="admin-section-content">
-                                    <div class="stats-grid" id="statsGrid"></div>
-                                </div>
+                            <div class="admin-section-content">
+                                <div class="stats-grid" id="statsGrid">Cargando...</div>
                             </div>
-                            <!-- 2. Acciones Rápidas -->
-                            <div class="admin-section open" id="secActions">
-                                <div class="admin-section-header">
-                                    <span class="admin-section-title">⚡ Acciones Rápidas</span>
-                                    <span class="admin-section-icon">▶</span>
-                                </div>
-                                <div class="admin-section-content">
-                                    <div class="action-blocks" id="actionBlocks"></div>
-                                </div>
+                        </div>
+                        <!-- Acciones Rápidas -->
+                        <div class="admin-section open" id="secActions">
+                            <div class="admin-section-header">
+                                <span class="admin-section-title">⚡ Acciones Rápidas</span>
+                                <span class="admin-section-icon">▶</span>
                             </div>
-                            <!-- 3. Rendimiento -->
-                            <div class="admin-section open" id="secPerf">
-                                <div class="admin-section-header">
-                                    <span class="admin-section-title">📈 Rendimiento (ms)</span>
-                                    <span class="admin-section-icon">▶</span>
+                            <div class="admin-section-content">
+                                <div class="action-blocks" id="actionBlocks"></div>
+                            </div>
+                        </div>
+                        <!-- Rendimiento (Ping) -->
+                        <div class="admin-section open" id="secPerf">
+                            <div class="admin-section-header">
+                                <span class="admin-section-title">📈 Rendimiento (latencia)</span>
+                                <span class="admin-section-icon">▶</span>
+                            </div>
+                            <div class="admin-section-content">
+                                <div class="ping-graph">
+                                    <canvas id="pingCanvas" width="400" height="70"></canvas>
                                 </div>
-                                <div class="admin-section-content">
-                                    <div class="ping-graph">
-                                        <canvas id="pingCanvas" width="400" height="80"></canvas>
-                                    </div>
-                                    <div style="text-align: center; margin-top: 5px; font-size: 10px;">
-                                        Latencia de /estado (promedio: <span id="avgPing">--</span> ms)
-                                    </div>
+                                <div style="text-align: center; margin-top: 6px; font-size: 10px;">
+                                    Promedio: <span id="avgPing">--</span> ms
                                 </div>
                             </div>
-                            <!-- 4. Actualización OTA -->
-                            <div class="admin-section open" id="secUpdate">
-                                <div class="admin-section-header">
-                                    <span class="admin-section-title">🔄 Actualización OTA</span>
-                                    <span class="admin-section-icon">▶</span>
-                                </div>
-                                <div class="admin-section-content">
-                                    <div class="action-blocks" id="updateBlocks"></div>
-                                </div>
+                        </div>
+                        <!-- Actualización OTA -->
+                        <div class="admin-section open" id="secUpdate">
+                            <div class="admin-section-header">
+                                <span class="admin-section-title">🔄 Actualización OTA</span>
+                                <span class="admin-section-icon">▶</span>
                             </div>
-                            <!-- 5. Logs del Sistema -->
-                            <div class="admin-section open" id="secLogs">
-                                <div class="admin-section-header">
-                                    <span class="admin-section-title">📋 Logs del Sistema</span>
-                                    <span class="admin-section-icon">▶</span>
-                                </div>
-                                <div class="admin-section-content">
-                                    <button id="toggleTimestampBtn" class="toggle-timestamp">Mostrar timestamps</button>
-                                    <div class="log-container" id="liveLogs">
-                                        <div class="log-entry log-info">→ Esperando datos...</div>
-                                    </div>
+                            <div class="admin-section-content">
+                                <div class="action-blocks" id="updateBlocks"></div>
+                            </div>
+                        </div>
+                        <!-- Logs del sistema -->
+                        <div class="admin-section open" id="secLogs">
+                            <div class="admin-section-header">
+                                <span class="admin-section-title">📋 Logs del Sistema</span>
+                                <span class="admin-section-icon">▶</span>
+                            </div>
+                            <div class="admin-section-content">
+                                <button id="toggleTimestampBtn" class="toggle-timestamp">Mostrar timestamps</button>
+                                <div class="log-container" id="liveLogs">
+                                    <div class="log-entry log-info">→ Conectando al ESP32...</div>
                                 </div>
                             </div>
                         </div>
@@ -697,7 +668,7 @@
     <div id="modal" class="modal">
         <div class="modal-content">
             <h3 id="modalTitle">Acceso restringido</h3>
-            <div id="modalBody">Introduce la contraseña de administrador:</div>
+            <div id="modalBody">Contraseña de administrador:</div>
             <input type="password" id="modalInput" placeholder="Contraseña">
             <div class="modal-buttons">
                 <button id="modalConfirm">Confirmar</button>
@@ -708,16 +679,14 @@
     <div id="toast" class="toast">Mensaje</div>
 
     <script>
-        // ==================== SISTEMA DE TOAST Y MODAL ====================
-        function showToast(message, isError = false) {
+        // ========== TOAST Y MODAL ==========
+        function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
-            toast.textContent = message;
+            toast.textContent = msg;
             toast.style.color = isError ? '#F06292' : 'var(--accent-cyan)';
             toast.style.borderColor = isError ? '#F06292' : 'var(--accent-cyan)';
             toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
+            setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
         let modalResolve = null;
@@ -733,45 +702,39 @@
             modalInput.value = '';
             modal.style.display = 'flex';
             modalInput.focus();
-            return new Promise((resolve) => {
-                modalResolve = resolve;
-            });
+            return new Promise((resolve) => { modalResolve = resolve; });
         }
-
         function closeModal(result) {
             modal.style.display = 'none';
-            if (modalResolve) {
-                modalResolve(result);
-                modalResolve = null;
-            }
+            if (modalResolve) { modalResolve(result); modalResolve = null; }
         }
-
         modalConfirm.onclick = () => closeModal(modalInput.value);
         modalCancel.onclick = () => closeModal(null);
-        modalInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') closeModal(modalInput.value);
-        });
+        modalInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') closeModal(modalInput.value); });
 
-        // ==================== VARIABLES GLOBALES ====================
+        // ========== VARIABLES GLOBALES ==========
         let isDarkMode = true;
         let dangerMode = false;
-        let emergenciaActivaPorMQTT = false;
+        let emergenciaActiva = false;    // simula una alerta activa
         let simulationActive = false;
+
         let tempHistory = [];
         let humHistory = [];
         let currentPoints = 20;
+
         let adminAuthenticated = false;
-        let adminPassword = "admin123";
-        let logsInterval = null;
+        const adminPassword = "admin123";
         let statsInterval = null;
+        let logsInterval = null;
         let pingHistory = [];
         let showTimestamps = false;
 
-        const adminCard = document.getElementById('adminCard');
-        const closeAdminBtn = document.getElementById('closeAdmin');
+        // Umbrales de desactivación (similares al ESP)
+        const UMBRAL_DESACTIVACION_CRITICA = 38.0;
+        const UMBRAL_DESACTIVACION_FUEGO = 35.0;
 
-        // ==================== FUNCIONES DE UI ====================
-        function setDangerMode(active, motivo) {
+        // ========== FUNCIONES DE UI (alertas, logs, etc.) ==========
+        function setDangerMode(active, motivo = "") {
             if (active === dangerMode) return;
             dangerMode = active;
             if (dangerMode) {
@@ -792,10 +755,11 @@
         }
 
         function resetAlertaForzado() {
-            emergenciaActivaPorMQTT = false;
+            emergenciaActiva = false;
             setDangerMode(false, "");
             const statusDiv = document.getElementById('net-status');
             statusDiv.innerText = "Alerta reiniciada manualmente";
+            showToast("Alerta reseteada");
             setTimeout(() => {
                 if (!dangerMode) statusDiv.innerText = "Conexión directa con ESP32";
                 else statusDiv.innerText = "Modo peligro activo";
@@ -811,86 +775,151 @@
             entry.setAttribute('title', timestamp);
             entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${timestamp}]</span> ${message}`;
             logDiv.prepend(entry);
-            if (logDiv.children.length > 100) logDiv.removeChild(logDiv.lastChild);
+            if (logDiv.children.length > 120) logDiv.removeChild(logDiv.lastChild);
         }
 
-        // ==================== OBTENER DATOS ====================
-        async function fetchInfo() {
-            try {
-                const res = await fetch('/info');
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return await res.json();
-            } catch(e) {
-                console.error("Error en /info:", e);
-                return null;
+        // ========== GRÁFICO SVG (tendencias) ==========
+        function drawSVG() {
+            const pointsCount = Math.min(tempHistory.length, currentPoints);
+            if (pointsCount < 2) return;
+            const temps = tempHistory.slice(-pointsCount);
+            const hums = humHistory.slice(-pointsCount);
+            let maxTemp = Math.max(...temps, 35);
+            let minTemp = Math.min(...temps, 15);
+            let maxHum = Math.max(...hums, 80);
+            let minHum = Math.min(...hums, 20);
+            maxTemp += (maxTemp - minTemp) * 0.1;
+            minTemp -= (maxTemp - minTemp) * 0.1;
+            maxHum += (maxHum - minHum) * 0.1;
+            minHum -= (maxHum - minHum) * 0.1;
+            if (minTemp < 0) minTemp = 0;
+            if (minHum < 0) minHum = 0;
+            const graphLeft = 40, graphRight = 560, graphWidth = graphRight - graphLeft;
+            const graphTop = 15, graphBottom = 145, graphHeight = graphBottom - graphTop;
+            let tempPoints = '', humPoints = '';
+            const stepX = graphWidth / (pointsCount - 1);
+            for (let i = 0; i < pointsCount; i++) {
+                const x = graphLeft + i * stepX;
+                const yTemp = graphBottom - ((temps[i] - minTemp) / (maxTemp - minTemp)) * graphHeight;
+                const yHum = graphBottom - ((hums[i] - minHum) / (maxHum - minHum)) * graphHeight;
+                tempPoints += `${x},${yTemp} `;
+                humPoints += `${x},${yHum} `;
+            }
+            document.getElementById('tempLine').setAttribute('points', tempPoints);
+            document.getElementById('humLine').setAttribute('points', humPoints);
+            const avgTemp = (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1);
+            const avgHum = (hums.reduce((a,b)=>a+b,0)/hums.length).toFixed(0);
+            document.getElementById('avgText').innerHTML = `📊 Promedio (últimos ${currentPoints}): Temp ${avgTemp}°C / Hum ${avgHum}%`;
+        }
+
+        function addDataPoint(temp, hum) {
+            tempHistory.push(temp);
+            humHistory.push(hum);
+            if (tempHistory.length > 200) { tempHistory.shift(); humHistory.shift(); }
+            drawSVG();
+        }
+
+        // ========== ACTUALIZACIÓN UI (desde /estado) ==========
+        function actualizarTemperatura(temp) {
+            const tempVal = parseFloat(temp);
+            document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
+            let altura = Math.min(100, tempVal * 2);
+            document.getElementById('bar-temp').style.height = altura + '%';
+            let desc = '';
+            if (tempVal < 20) desc = 'Ambiente fresco';
+            else if (tempVal < 30) desc = 'Temperatura normal';
+            else if (tempVal < 40) desc = 'Calor elevado';
+            else desc = '¡PELIGRO! Calor extremo';
+            document.getElementById('desc-val').innerText = desc;
+            
+            if (dangerMode) {
+                if (emergenciaActiva) {
+                    if (tempVal < UMBRAL_DESACTIVACION_FUEGO) {
+                        setDangerMode(false, "");
+                        emergenciaActiva = false;
+                        addSystemLog(`Alerta desactivada: temperatura < ${UMBRAL_DESACTIVACION_FUEGO}°C`);
+                    }
+                } else {
+                    if (tempVal < UMBRAL_DESACTIVACION_CRITICA) {
+                        setDangerMode(false, "");
+                        addSystemLog(`Alerta por calor desactivada: temp < ${UMBRAL_DESACTIVACION_CRITICA}°C`);
+                    }
+                }
+            }
+            if (!dangerMode && tempVal >= 40.0 && !emergenciaActiva) {
+                setDangerMode(true, "Temperatura crítica > 40°C");
+                emergenciaActiva = true;
             }
         }
 
-        async function fetchLogs() {
+        function actualizarHumedad(hum) {
+            const humVal = parseFloat(hum);
+            document.getElementById('hum-val').innerHTML = `${Math.round(humVal)}<span class="unit">%</span>`;
+            document.getElementById('bar-hum').style.height = Math.min(100, humVal) + '%';
+        }
+
+        function actualizarRSSI(rssi) {
+            const el = document.getElementById('rssi-val');
+            el.innerHTML = `${rssi}<span class="unit">dBm</span>`;
+            if (rssi > -60) el.style.color = '#81C784';
+            else if (rssi > -75) el.style.color = '#FFD54F';
+            else el.style.color = '#F06292';
+        }
+
+        // ========== OBTENER DATOS DEL ESP32 ==========
+        async function fetchEstado() {
             try {
-                const res = await fetch('/logs');
-                if (!res.ok) throw new Error();
-                const data = await res.json();
-                return data.logs || [];
-            } catch(e) {
-                return [];
+                const response = await fetch('/estado');
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                actualizarTemperatura(data.temp);
+                actualizarHumedad(data.hum);
+                actualizarRSSI(data.rssi);
+                addDataPoint(data.temp, data.hum);
+                document.getElementById('esp-status').innerText = 'Online';
+                document.getElementById('esp-status').style.background = 'var(--chart-green)';
+            } catch(err) {
+                console.log("Error fetchEstado:", err);
+                document.getElementById('esp-status').innerText = 'Error';
+                document.getElementById('esp-status').style.background = 'var(--chart-pink)';
             }
         }
 
-        async function updateStatsUI() {
-            const info = await fetchInfo();
-            if (!info) return;
-            const sketchPercent = info.sketch_percent !== undefined ? info.sketch_percent : 45;
-            const littlefsPercent = info.littlefs_percent !== undefined ? info.littlefs_percent : 23;
-            const freePercent = 100 - (sketchPercent + littlefsPercent);
-            const sketchTotalKB = 1992;
-            const littlefsTotalKB = 128;
-            const sketchUsedKB = (sketchPercent * sketchTotalKB) / 100;
-            const littlefsUsedKB = (littlefsPercent * littlefsTotalKB) / 100;
-            const totalKB = sketchTotalKB + littlefsTotalKB;
-            const usedKB = sketchUsedKB + littlefsUsedKB;
-            const freeKB = totalKB - usedKB;
-
-            document.getElementById('statsGrid').innerHTML = `
-                <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${info.firmware || '--'}</div></div>
-                <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(info.uptime || 0)}</div></div>
-                <div class="stat-card">
-                    <div class="stat-label">RAM (Heap)</div>
-                    <div class="stat-value">${info.heap_percent || 0}%</div>
-                    <div class="progress-bar"><div class="progress-fill" style="width: ${info.heap_percent || 0}%"></div></div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Almacenamiento Total (Flash)</div>
-                    <div class="stat-value">${Math.round(usedKB)} KB / ${totalKB} KB (${Math.round(sketchPercent + littlefsPercent)}%)</div>
-                    <div class="stacked-bar">
-                        <div class="segment-firmware" style="width: ${sketchPercent}%;" title="Firmware: ${sketchPercent}% (${sketchUsedKB.toFixed(1)} KB)"></div>
-                        <div class="segment-littlefs" style="width: ${littlefsPercent}%;" title="LittleFS: ${littlefsPercent}% (${littlefsUsedKB.toFixed(1)} KB)"></div>
-                        <div class="segment-free" style="width: ${freePercent}%;" title="Libre: ${freePercent}% (${freeKB.toFixed(1)} KB)"></div>
-                    </div>
-                    <div style="font-size: 10px; margin-top: 4px;">
-                        <span style="color: var(--color-firmware);">█ Firmware</span> 
-                        <span style="color: var(--color-littlefs);">█ LittleFS</span> 
-                        <span style="color: var(--color-free);">█ Libre</span>
-                    </div>
-                </div>
-                <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${info.ip_ap || '--'}</div></div>
-                <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${info.ip_sta || '--'}</div></div>
-                <div class="stat-card"><div class="stat-label">MQTT</div><div class="stat-value">${info.mqtt_status || '--'}</div></div>
-                <div class="stat-card"><div class="stat-label">mDNS</div><div class="stat-value">${info.mdns || '--'}</div></div>
-            `;
+        // ========== CONTROL DEL SERVO (HTTP) ==========
+        async function toggleServo() {
+            const btn = document.getElementById('btn-servo');
+            btn.innerText = "ENVIANDO...";
+            btn.style.opacity = "0.7";
+            try {
+                const res = await fetch('/toggleServo');
+                const state = await res.text();
+                btn.style.opacity = "1";
+                if (state === "ON") {
+                    btn.classList.add('active');
+                    btn.innerText = "SISTEMA ACTIVO";
+                    addSystemLog("🔁 Servo activado.", 'info');
+                } else {
+                    btn.classList.remove('active');
+                    btn.innerText = "DESACTIVADO";
+                    addSystemLog("🔁 Servo desactivado.", 'info');
+                }
+            } catch(e) {
+                btn.classList.remove('active');
+                btn.style.opacity = "1";
+                btn.innerText = "SIN CONEXIÓN";
+                setTimeout(() => btn.innerText = "DESACTIVADO", 3000);
+                addSystemLog("❌ Error en comando del servo.", 'error');
+                showToast("Error al comunicar con el ESP32", true);
+            }
         }
 
-        function formatUptime(seconds) {
-            let d = Math.floor(seconds / 86400);
-            let h = Math.floor((seconds % 86400) / 3600);
-            let m = Math.floor((seconds % 3600) / 60);
-            let s = seconds % 60;
-            return `${d}d ${h}h ${m}m ${s}s`;
-        }
-
-        // ==================== COMANDOS (con toasts) ====================
+        // ========== FUNCIONES HTTP DEL PANEL ADMIN ==========
         async function sendCommand(cmd) {
-            addSystemLog(`Comando enviado: ${cmd}`, 'info');
+            if (!adminAuthenticated) {
+                showToast("Accede al panel de admin primero", true);
+                return;
+            }
+            addSystemLog(`Comando HTTP: ${cmd}`, 'info');
             try {
                 const res = await fetch(`/cmd?action=${cmd}`);
                 const text = await res.text();
@@ -904,54 +933,86 @@
                     addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn');
                     showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`);
                 } else if (cmd === 'clear_logs') {
-                    document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs limpiados localmente</div>';
+                    document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs locales limpiados</div>';
                     showToast("Logs locales limpiados");
                 } else if (cmd === 'update_fw') {
                     showToast("Iniciando actualización de firmware...");
                 } else if (cmd === 'update_html') {
                     if (res.ok) {
-                        showToast("HTML actualizado. La página se recargará.");
-                        setTimeout(() => {
-                            window.location.href = window.location.pathname + '?v=' + Date.now();
-                        }, 1000);
-                    } else {
-                        showToast("Error al actualizar el HTML", true);
-                    }
+                        showToast("HTML actualizado. Recargando...");
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else showToast("Error actualizando HTML", true);
                 } else {
                     showToast(`Comando ${cmd} ejecutado`);
                 }
             } catch(e) {
-                console.error(e);
-                addSystemLog(`Error al ejecutar ${cmd}`, 'error');
-                showToast(`Error al ejecutar ${cmd}`, true);
+                addSystemLog(`Error en comando ${cmd}: ${e.message}`, 'error');
+                showToast(`Error: ${e.message}`, true);
             }
         }
 
-        function buildActionBlocks(containerId, actionsList) {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            container.innerHTML = '';
-            actionsList.forEach(action => {
-                const block = document.createElement('div');
-                block.className = 'action-block';
-                block.innerHTML = `<span class="action-icon">${action.icon}</span><span class="action-label">${action.label}</span>`;
-                block.addEventListener('click', () => sendCommand(action.cmd));
-                container.appendChild(block);
-            });
+        async function updateStatsUI() {
+            if (!adminAuthenticated) return;
+            try {
+                const res = await fetch('/info');
+                if (!res.ok) throw new Error();
+                const info = await res.json();
+                const sketchPercent = info.sketch_percent || 45;
+                const littlefsPercent = info.littlefs_percent || 23;
+                const freePercent = 100 - (sketchPercent + littlefsPercent);
+                const heapPercent = info.heap_percent || 0;
+                const uptime = info.uptime || 0;
+                const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
+                const totalKB = 1992 + 128;
+                const freeKB = totalKB - usedKB;
+                document.getElementById('statsGrid').innerHTML = `
+                    <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${info.firmware || '--'}</div></div>
+                    <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
+                    <div class="stat-card"><div class="stat-label">RAM (Heap)</div><div class="stat-value">${heapPercent}%</div><div class="progress-bar"><div class="progress-fill" style="width: ${heapPercent}%"></div></div></div>
+                    <div class="stat-card"><div class="stat-label">Flash usado</div><div class="stat-value">${Math.round(usedKB)} KB / ${totalKB} KB (${Math.round(sketchPercent+littlefsPercent)}%)</div><div class="stacked-bar"><div class="segment-firmware" style="width: ${sketchPercent}%;"></div><div class="segment-littlefs" style="width: ${littlefsPercent}%;"></div><div class="segment-free" style="width: ${freePercent}%;"></div></div></div>
+                    <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${info.ip_ap || '--'}</div></div>
+                    <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${info.ip_sta || '--'}</div></div>
+                    <div class="stat-card"><div class="stat-label">MQTT broker</div><div class="stat-value">${info.mqtt_status || '--'}</div></div>
+                `;
+            } catch(e) {
+                document.getElementById('statsGrid').innerHTML = `<div class="stat-card">Error cargando estadísticas</div>`;
+            }
         }
 
-        const actions = [
-            { icon: "🔄", label: "Reiniciar ESP32", cmd: "restart" },
-            { icon: "🔍", label: "Comprobar Actualización", cmd: "check_ota" },
-            { icon: "🔥", label: "Simulación fuego", cmd: "toggle_sim" },
-            { icon: "🗑", label: "Limpiar logs", cmd: "clear_logs" }
-        ];
-        const updateActions = [
-            { icon: "📡", label: "Actualizar Firmware", cmd: "update_fw" },
-            { icon: "🌐", label: "Actualizar HTML", cmd: "update_html" }
-        ];
+        function formatUptime(seconds) {
+            let d = Math.floor(seconds / 86400);
+            let h = Math.floor((seconds % 86400) / 3600);
+            let m = Math.floor((seconds % 3600) / 60);
+            let s = seconds % 60;
+            return `${d}d ${h}h ${m}m ${s}s`;
+        }
 
-        // ==================== PING ====================
+        async function updateLogsUI() {
+            if (!adminAuthenticated) return;
+            try {
+                const res = await fetch('/logs');
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                const logs = data.logs || [];
+                const logDiv = document.getElementById('liveLogs');
+                if (!logDiv) return;
+                if (logs.length === 0) {
+                    logDiv.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>';
+                    return;
+                }
+                logDiv.innerHTML = '';
+                logs.slice().reverse().forEach(log => {
+                    const t = new Date(log.timestamp).toLocaleTimeString();
+                    const entry = document.createElement('div');
+                    entry.className = `log-entry log-${log.level}`;
+                    entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
+                    logDiv.appendChild(entry);
+                });
+            } catch(e) {
+                // Silencio
+            }
+        }
+
         async function measurePing() {
             if (!adminAuthenticated) return;
             let start = performance.now();
@@ -965,11 +1026,12 @@
                 document.getElementById('avgPing').innerText = avg.toFixed(1);
             } catch(e) {}
         }
+
         function drawPingGraph() {
             const canvas = document.getElementById('pingCanvas');
             if (!canvas) return;
             const w = canvas.clientWidth;
-            const h = 80;
+            const h = 70;
             canvas.width = w;
             canvas.height = h;
             const ctx = canvas.getContext('2d');
@@ -989,15 +1051,18 @@
             ctx.stroke();
         }
 
-        // ==================== ADMIN PANEL (con modal) ====================
+        // ========== ADMIN PANEL (autenticación) ==========
+        const adminCard = document.getElementById('adminCard');
+        const closeAdminBtn = document.getElementById('closeAdmin');
+
         async function expandAdmin() {
             if (!adminAuthenticated) {
-                const pwd = await showPasswordModal("Acceso restringido", "Introduce la contraseña de administrador:", "Contraseña");
+                const pwd = await showPasswordModal("Acceso restringido", "Contraseña de administrador:", "Contraseña");
                 if (pwd === adminPassword) {
                     adminAuthenticated = true;
                     adminCard.classList.add('expanded');
                     startAdminServices();
-                    addSystemLog("🔓 Acceso concedido al panel de administración.", 'info');
+                    addSystemLog("🔓 Acceso concedido al panel de administración", 'info');
                     showToast("Acceso concedido");
                 } else if (pwd !== null) {
                     showToast("Contraseña incorrecta", true);
@@ -1008,147 +1073,27 @@
                 startAdminServices();
             }
         }
+
         function collapseAdmin() {
             adminCard.classList.remove('expanded');
-            if (logsInterval) clearInterval(logsInterval);
             if (statsInterval) clearInterval(statsInterval);
-            logsInterval = null;
+            if (logsInterval) clearInterval(logsInterval);
             statsInterval = null;
+            logsInterval = null;
         }
-        async function updateLogsUI() {
-            if (!adminAuthenticated) return;
-            const logs = await fetchLogs();
-            const logDiv = document.getElementById('liveLogs');
-            if (!logDiv) return;
-            if (logs.length === 0) {
-                logDiv.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>';
-                return;
-            }
-            logDiv.innerHTML = '';
-            logs.slice().reverse().forEach(log => {
-                const t = new Date(log.timestamp).toLocaleTimeString();
-                const entry = document.createElement('div');
-                entry.className = `log-entry log-${log.level}`;
-                entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
-                logDiv.appendChild(entry);
-            });
-        }
+
         function startAdminServices() {
-            if (logsInterval) clearInterval(logsInterval);
             if (statsInterval) clearInterval(statsInterval);
+            if (logsInterval) clearInterval(logsInterval);
             updateStatsUI();
             updateLogsUI();
-            statsInterval = setInterval(() => { if (adminAuthenticated) updateStatsUI(); }, 5000);
-            logsInterval = setInterval(() => { if (adminAuthenticated) updateLogsUI(); }, 3000);
-            setInterval(measurePing, 5000);
+            statsInterval = setInterval(() => { if (adminAuthenticated) updateStatsUI(); }, 6000);
+            logsInterval = setInterval(() => { if (adminAuthenticated) updateLogsUI(); }, 4000);
+            setInterval(() => { if (adminAuthenticated) measurePing(); }, 5000);
             measurePing();
         }
 
-        // ==================== GRÁFICO SVG ====================
-        function drawSVG() {
-            const pointsCount = Math.min(tempHistory.length, currentPoints);
-            if (pointsCount < 2) return;
-            const temps = tempHistory.slice(-pointsCount);
-            const hums = humHistory.slice(-pointsCount);
-            let maxTemp = Math.max(...temps, 35);
-            let minTemp = Math.min(...temps, 15);
-            let maxHum = Math.max(...hums, 80);
-            let minHum = Math.min(...hums, 20);
-            maxTemp += (maxTemp - minTemp) * 0.1;
-            minTemp -= (maxTemp - minTemp) * 0.1;
-            maxHum += (maxHum - minHum) * 0.1;
-            minHum -= (maxHum - minHum) * 0.1;
-            if (minTemp < 0) minTemp = 0;
-            if (minHum < 0) minHum = 0;
-            const graphLeft = 40, graphRight = 560, graphWidth = graphRight - graphLeft;
-            const graphTop = 15, graphBottom = 160, graphHeight = graphBottom - graphTop;
-            let tempPoints = '', humPoints = '';
-            const stepX = graphWidth / (pointsCount - 1);
-            for (let i = 0; i < pointsCount; i++) {
-                const x = graphLeft + i * stepX;
-                const yTemp = graphBottom - ((temps[i] - minTemp) / (maxTemp - minTemp)) * graphHeight;
-                const yHum = graphBottom - ((hums[i] - minHum) / (maxHum - minHum)) * graphHeight;
-                tempPoints += `${x},${yTemp} `;
-                humPoints += `${x},${yHum} `;
-            }
-            document.getElementById('tempLine').setAttribute('points', tempPoints);
-            document.getElementById('humLine').setAttribute('points', humPoints);
-            const avgTemp = (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1);
-            const avgHum = (hums.reduce((a,b)=>a+b,0)/hums.length).toFixed(0);
-            document.getElementById('avgText').innerHTML = `📊 Promedio (últimos ${currentPoints}): Temp ${avgTemp}°C / Hum ${avgHum}%`;
-        }
-        function addDataPoint(temp, hum) {
-            tempHistory.push(temp);
-            humHistory.push(hum);
-            if (tempHistory.length > 200) { tempHistory.shift(); humHistory.shift(); }
-            drawSVG();
-        }
-        function actualizarTemperatura(temp) {
-            const tempVal = parseFloat(temp);
-            document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
-            let altura = Math.min(100, tempVal * 2);
-            document.getElementById('bar-temp').style.height = altura + '%';
-            let desc = '';
-            if (tempVal < 20) desc = 'Ambiente fresco';
-            else if (tempVal < 30) desc = 'Temperatura normal';
-            else if (tempVal < 40) desc = 'Calor elevado';
-            else desc = '¡PELIGRO! Calor extremo';
-            document.getElementById('desc-val').innerText = desc;
-            if (!dangerMode && tempVal >= 40.0 && !emergenciaActivaPorMQTT) setDangerMode(true, "Temperatura crítica > 40°C");
-            else if (dangerMode && !emergenciaActivaPorMQTT && tempVal < 38.0) setDangerMode(false, "");
-        }
-        function actualizarHumedad(hum) {
-            const humVal = parseFloat(hum);
-            document.getElementById('hum-val').innerHTML = `${Math.round(humVal)}<span class="unit">%</span>`;
-            document.getElementById('bar-hum').style.height = Math.min(100, humVal) + '%';
-        }
-        function actualizarRSSI(rssi) {
-            const el = document.getElementById('rssi-val');
-            el.innerHTML = `${rssi}<span class="unit">dBm</span>`;
-            if (rssi > -60) el.style.color = '#81C784';
-            else if (rssi > -75) el.style.color = '#FFD54F';
-            else el.style.color = '#F06292';
-        }
-        async function fetchEstado() {
-            try {
-                const response = await fetch('/estado');
-                if (!response.ok) throw new Error();
-                const data = await response.json();
-                actualizarTemperatura(data.temp);
-                actualizarHumedad(data.hum);
-                actualizarRSSI(data.rssi);
-                addDataPoint(data.temp, data.hum);
-                document.getElementById('esp-status').innerText = 'Online';
-            } catch(err) {
-                console.log("Error fetchEstado:", err);
-                document.getElementById('esp-status').innerText = 'Error';
-            }
-        }
-        function toggleServo() {
-            const btn = document.getElementById('btn-servo');
-            btn.innerText = "ENVIANDO...";
-            btn.style.opacity = "0.7";
-            fetch('/toggleServo').then(res => res.text()).then(state => {
-                btn.style.opacity = "1";
-                if (state === "ON") {
-                    btn.classList.add('active');
-                    btn.innerText = "SISTEMA ACTIVO";
-                    addSystemLog("🔁 Servo activado.", 'info');
-                } else {
-                    btn.classList.remove('active');
-                    btn.innerText = "DESACTIVADO";
-                    addSystemLog("🔁 Servo desactivado.", 'info');
-                }
-            }).catch(() => {
-                btn.classList.remove('active');
-                btn.style.opacity = "1";
-                btn.innerText = "SIN CONEXIÓN";
-                setTimeout(() => btn.innerText = "DESACTIVADO", 3000);
-                addSystemLog("❌ Error en comando del servo.", 'error');
-            });
-        }
-
-        // ==================== INICIALIZACIÓN ====================
+        // ========== INICIALIZACIÓN DE BOTONES Y EVENTOS ==========
         document.querySelectorAll('.range-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
@@ -1158,9 +1103,68 @@
             });
         });
         document.querySelector('.range-btn[data-points="20"]').classList.add('active');
+
         document.getElementById('resetAlertBtnSquare').addEventListener('click', resetAlertaForzado);
         document.getElementById('btn-servo').addEventListener('click', toggleServo);
 
+        // Acciones rápidas (HTTP)
+        const actions = [
+            { icon: "🔄", label: "Reiniciar ESP32", cmd: "restart" },
+            { icon: "🔍", label: "Comprobar OTA", cmd: "check_ota" },
+            { icon: "🔥", label: "Simular fuego", cmd: "toggle_sim" },
+            { icon: "🗑", label: "Limpiar logs", cmd: "clear_logs" }
+        ];
+        const updateActions = [
+            { icon: "📡", label: "Actualizar Firmware", cmd: "update_fw" },
+            { icon: "🌐", label: "Actualizar HTML", cmd: "update_html" }
+        ];
+        const actionContainer = document.getElementById('actionBlocks');
+        const updateContainer = document.getElementById('updateBlocks');
+        if (actionContainer) {
+            actionContainer.innerHTML = '';
+            actions.forEach(a => {
+                const div = document.createElement('div');
+                div.className = 'action-block';
+                div.innerHTML = `<span class="action-icon">${a.icon}</span><span class="action-label">${a.label}</span>`;
+                div.addEventListener('click', () => sendCommand(a.cmd));
+                actionContainer.appendChild(div);
+            });
+        }
+        if (updateContainer) {
+            updateContainer.innerHTML = '';
+            updateActions.forEach(a => {
+                const div = document.createElement('div');
+                div.className = 'action-block';
+                div.innerHTML = `<span class="action-icon">${a.icon}</span><span class="action-label">${a.label}</span>`;
+                div.addEventListener('click', () => sendCommand(a.cmd));
+                updateContainer.appendChild(div);
+            });
+        }
+
+        // Panel admin eventos
+        adminCard.addEventListener('click', (e) => {
+            if (e.target === closeAdminBtn || e.target.parentElement === closeAdminBtn) { collapseAdmin(); return; }
+            if (!adminCard.classList.contains('expanded')) expandAdmin();
+        });
+        document.querySelectorAll('.admin-section-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const current = header.closest('.admin-section');
+                const isOpen = current.classList.contains('open');
+                document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('open'));
+                if (!isOpen) current.classList.add('open');
+            });
+        });
+        document.getElementById('toggleTimestampBtn')?.addEventListener('click', () => {
+            showTimestamps = !showTimestamps;
+            document.querySelectorAll('.log-timestamp').forEach(span => {
+                if (showTimestamps) span.classList.add('visible');
+                else span.classList.remove('visible');
+            });
+            document.getElementById('toggleTimestampBtn').innerText = showTimestamps ? "Ocultar timestamps" : "Mostrar timestamps";
+        });
+
+        // Tema oscuro/claro y partículas
         const themeBtn = document.getElementById('theme-toggle');
         themeBtn.onclick = () => {
             isDarkMode = !isDarkMode;
@@ -1169,7 +1173,6 @@
             initParticles();
         };
 
-        // Partículas
         const canvasBg = document.getElementById('weather-canvas');
         const ctxBg = canvasBg.getContext('2d');
         let particles = [];
@@ -1185,38 +1188,10 @@
         function animateBg() { ctxBg.clearRect(0,0,canvasBg.width,canvasBg.height); particles.forEach(p=>{p.update(); p.draw();}); requestAnimationFrame(animateBg); }
         initParticles(); animateBg();
 
-        // Admin panel eventos
-        adminCard.addEventListener('click', (e) => {
-            if (e.target === closeAdminBtn || e.target.parentElement === closeAdminBtn) { collapseAdmin(); return; }
-            if (!adminCard.classList.contains('expanded')) expandAdmin();
-        });
-        // Acordeón: solo una sección abierta
-        document.querySelectorAll('.admin-section-header').forEach(header => {
-            header.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const currentSection = header.closest('.admin-section');
-                if (!currentSection) return;
-                const isCurrentlyOpen = currentSection.classList.contains('open');
-                document.querySelectorAll('.admin-section').forEach(section => {
-                    section.classList.remove('open');
-                });
-                if (!isCurrentlyOpen) currentSection.classList.add('open');
-            });
-        });
-        document.getElementById('toggleTimestampBtn')?.addEventListener('click', () => {
-            showTimestamps = !showTimestamps;
-            document.querySelectorAll('.log-timestamp').forEach(span => {
-                if (showTimestamps) span.classList.add('visible');
-                else span.classList.remove('visible');
-            });
-            document.getElementById('toggleTimestampBtn').innerText = showTimestamps ? "Ocultar timestamps" : "Mostrar timestamps";
-        });
-        buildActionBlocks('actionBlocks', actions);
-        buildActionBlocks('updateBlocks', updateActions);
-
+        // Arranque
         fetchEstado();
         setInterval(fetchEstado, 2000);
-        addSystemLog("🚀 Página cargada. Panel administración listo.", 'info');
+        addSystemLog("🚀 Panel Modo AP cargado - Admin abajo, sin apretujamiento", 'info');
     </script>
 </body>
 </html>
