@@ -48,7 +48,7 @@ const unsigned long INTERVALO_OTA = 60001;      // 1 minuto (pruebas). Cambiar a
 // ==================== MAPEO DE PINES ====================
 #define DHTPIN 27
 #define DHTTYPE DHT11
-#define PIN_SERVO_H 25
+#define PIN_SERVO_H 15
 #define PIN_SERVO_V 26
 #define PIN_BOMBA 32
 #define PIN_ROJO 13
