@@ -14,8 +14,8 @@
 #include <HTTPUpdate.h>
 #include <ArduinoJson.h>
 
-// ==================== BUFFER DE LOGS (MEJORADO) ====================
-#define MAX_LOGS 30   // Reducido de 50 a 30 para acelerar respuesta MQTT
+// ==================== BUFFER DE LOGS ====================
+#define MAX_LOGS 30
 struct LogEntry {
   unsigned long timestamp;
   String level;
@@ -26,7 +26,6 @@ int logIndex = 0;
 int logCount = 0;
 
 void addLog(String level, String message) {
-  // Truncar mensajes largos (más de 100 caracteres)
   if (message.length() > 100) message = message.substring(0, 97) + "...";
   logBuffer[logIndex].timestamp = millis();
   logBuffer[logIndex].level = level;
@@ -43,18 +42,19 @@ const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dash
 const char* urlHTML = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/index.html";
 
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 60001;      // 1 minuto (pruebas). Cambiar a 3600000 en producción
+const unsigned long INTERVALO_OTA = 60001;      // 1 minuto (pruebas)
 
 // ==================== MAPEO DE PINES ====================
 #define DHTPIN 27
 #define DHTTYPE DHT11
-#define PIN_SERVO_H 15
+#define PIN_SERVO_H 15          // Servo horizontal (360°)
 #define PIN_SERVO_V 26
 #define PIN_BOMBA 32
 #define PIN_ROJO 13
 #define PIN_VERDE 12
 #define PIN_AZUL 14
-#define PIN_LLAMA 35
+#define PIN_LLAMA 35            // KY-026 (digital opcional, aquí analógico)
+#define PIN_MQ2 34              // Sensor MQ-2 (salida analógica)
 #define PIN_BUZZER 33
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -68,20 +68,22 @@ DNSServer dnsServer;
 // ==================== ESTADOS Y TIEMPOS DE LA RUTINA ====================
 enum EstadoSistema { REPOSO, ESPERANDO_AGUA, GIRANDO_IZQ, GIRANDO_DER, VOLVIENDO_CENTRO };
 EstadoSistema estadoActual = REPOSO;
-const int SERVO_H_NEUTRAL = 94;
-unsigned long TIEMPO_90_IZQ = 750;
+const int SERVO_H_STOP = 90;            // Para servo 360, 90 = parado
+unsigned long TIEMPO_90_IZQ = 750;      // Tiempo para girar 90° (ajustar)
 unsigned long TIEMPO_90_DER = 780;
 unsigned long TIEMPO_RETORNO = 500;
 unsigned long cronometroRutina = 0;
 const unsigned long WATER_DELAY_MS = 1000;
 
 // ==================== VARIABLES DE SEGURIDAD Y SENSORES ====================
-const int UMBRAL_FUEGO = 500;
+const int UMBRAL_FUEGO = 500;           // Umbral para KY-026 (valor analógico)
+const int UMBRAL_GAS = 500;             // Umbral para MQ-2 (ajustar según calibración)
 const float TEMP_CRITICA = 40.0;
 bool emergenciaEnviada = false;
 float tempGuardada = 25.0;
 float humGuardada = 50.0;
 int rssiGuardado = -99;
+int gasValue = 0;                       // Lectura analógica del MQ-2
 unsigned long cronometroDatos = 0;
 unsigned long cronometroRSSI = 0;
 unsigned long ultimoTiempoDHT = 0;
@@ -109,13 +111,15 @@ void setColor(int r, int g, int b) {
   analogWrite(PIN_AZUL, b);
 }
 
-void enviarNotificacionMQTT(String motivo, float temp) {
+void enviarNotificacionMQTT(String motivo, float temp, int gas = -1) {
   if (!client.connected()) return;
   struct tm timeinfo;
   char fechaHora[30];
   if (!getLocalTime(&timeinfo)) strcpy(fechaHora, "Error de tiempo");
   else strftime(fechaHora, 30, "%I:%M%p %d/%m/%Y", &timeinfo);
-  String payload = "{\"motivo\":\"" + motivo + "\",\"temperatura\":" + String(temp) + ",\"timestamp\":\"" + String(fechaHora) + "\"}";
+  String payload = "{\"motivo\":\"" + motivo + "\",\"temperatura\":" + String(temp);
+  if (gas >= 0) payload += ",\"gas\":" + String(gas);
+  payload += ",\"timestamp\":\"" + String(fechaHora) + "\"}";
   client.publish("fxi/emergencia", payload.c_str());
 }
 
@@ -129,122 +133,110 @@ void iniciarRutina(String motivo) {
 }
 
 void detenerRutina() {
-  servoHorizontal.write(SERVO_H_NEUTRAL);
+  servoHorizontal.write(SERVO_H_STOP);
   digitalWrite(PIN_BOMBA, LOW);
   estadoActual = REPOSO;
   addLog("info", "Rutina detenida.");
 }
 
-// ==================== MQTT ADMIN: MANEJADOR DE COMANDOS ====================
+// ==================== MQTT ADMIN ====================
 void respondAdminCommand(int id, bool success, JsonDocument &data, const String &errorMsg = "") {
   if (!client.connected()) return;
   DynamicJsonDocument resp(1024);
   resp["id"] = id;
   resp["success"] = success;
-  if (success) {
-    resp["data"] = data;
-  } else {
-    resp["error"] = errorMsg;
-  }
+  if (success) resp["data"] = data;
+  else resp["error"] = errorMsg;
   String out;
   serializeJson(resp, out);
   client.publish("fxi/admin/resp", out.c_str());
 }
 
 void processAdminCommand(int id, const String &action) {
-    addLog("info", "Comando MQTT admin: " + action + " (id=" + String(id) + ")");
-
-    if (action == "get_stats") {
-        DynamicJsonDocument data(512);
-        data["firmware"] = FIRMWARE_VERSION;
-        data["uptime"] = millis() / 1000;
-        size_t heapTotal = ESP.getHeapSize();
-        size_t heapFree = ESP.getFreeHeap();
-        data["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
-        data["littlefs_percent"] = 30;
-        size_t sketchSize = ESP.getSketchSize();
-        size_t sketchTotal = 1992294;
-        data["sketch_percent"] = (sketchSize * 100) / sketchTotal;
-        data["ip_ap"] = WiFi.softAPIP().toString();
-        data["ip_sta"] = WiFi.localIP().toString();
-        data["mqtt_status"] = client.connected() ? "conectado" : "desconectado";
-        data["mdns"] = "fluxaignis.local";
-        respondAdminCommand(id, true, data);
+  addLog("info", "Comando MQTT admin: " + action + " (id=" + String(id) + ")");
+  if (action == "get_stats") {
+    DynamicJsonDocument data(512);
+    data["firmware"] = FIRMWARE_VERSION;
+    data["uptime"] = millis() / 1000;
+    size_t heapTotal = ESP.getHeapSize();
+    size_t heapFree = ESP.getFreeHeap();
+    data["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
+    data["littlefs_percent"] = 30;
+    size_t sketchSize = ESP.getSketchSize();
+    size_t sketchTotal = 1992294;
+    data["sketch_percent"] = (sketchSize * 100) / sketchTotal;
+    data["ip_ap"] = WiFi.softAPIP().toString();
+    data["ip_sta"] = WiFi.localIP().toString();
+    data["mqtt_status"] = client.connected() ? "conectado" : "desconectado";
+    data["mdns"] = "fluxaignis.local";
+    respondAdminCommand(id, true, data);
+  }
+  else if (action == "get_logs") {
+    DynamicJsonDocument data(6144);
+    JsonArray logs = data.createNestedArray("logs");
+    int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
+    for (int i = 0; i < logCount; i++) {
+      int idx = (start + i) % MAX_LOGS;
+      JsonObject entry = logs.createNestedObject();
+      entry["timestamp"] = logBuffer[idx].timestamp;
+      entry["level"] = logBuffer[idx].level;
+      entry["message"] = logBuffer[idx].message;
     }
-    else if (action == "get_logs") {
-        DynamicJsonDocument data(6144);   // Buffer ampliado
-        JsonArray logs = data.createNestedArray("logs");
-        int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
-        for (int i = 0; i < logCount; i++) {
-            int idx = (start + i) % MAX_LOGS;
-            JsonObject entry = logs.createNestedObject();
-            entry["timestamp"] = logBuffer[idx].timestamp;
-            entry["level"] = logBuffer[idx].level;
-            entry["message"] = logBuffer[idx].message;
-        }
-        respondAdminCommand(id, true, data);
-    }
-    else if (action == "restart") {
-        DynamicJsonDocument empty(64);
-        respondAdminCommand(id, true, empty);
-        delay(100);
-        ESP.restart();
-    }
-    else if (action == "update_fw") {
-        DynamicJsonDocument empty(64);
-        respondAdminCommand(id, true, empty);
-        chequearActualizacionGitHub();
-    }
-    else if (action == "update_html") {
-        DynamicJsonDocument empty(64);
-        respondAdminCommand(id, true, empty);
-        actualizarHTML();
-    }
-    else if (action == "toggle_sim") {
-        simularFuego = !simularFuego;
-        DynamicJsonDocument data(32);
-        data["simulating"] = simularFuego;
-        respondAdminCommand(id, true, data);
-        addLog("warn", simularFuego ? "Simulación de fuego ACTIVADA por MQTT admin" : "Simulación DESACTIVADA por MQTT admin");
-    }
-    else if (action == "clear_logs") {
-        logIndex = 0;
-        logCount = 0;
-        DynamicJsonDocument empty(64);
-        respondAdminCommand(id, true, empty);
-        addLog("info", "Logs limpiados por comando MQTT admin");
-    }
-    else if (action == "ping") {
-        DynamicJsonDocument data(32);
-        data["pong"] = true;
-        respondAdminCommand(id, true, data);
-    }
-    else {
-        DynamicJsonDocument empty(64);
-        respondAdminCommand(id, false, empty, "Unknown action: " + action);
-    }
+    respondAdminCommand(id, true, data);
+  }
+  else if (action == "restart") {
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, true, empty);
+    delay(100);
+    ESP.restart();
+  }
+  else if (action == "update_fw") {
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, true, empty);
+    chequearActualizacionGitHub();
+  }
+  else if (action == "update_html") {
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, true, empty);
+    actualizarHTML();
+  }
+  else if (action == "toggle_sim") {
+    simularFuego = !simularFuego;
+    DynamicJsonDocument data(32);
+    data["simulating"] = simularFuego;
+    respondAdminCommand(id, true, data);
+    addLog("warn", simularFuego ? "Simulación ACTIVADA" : "Simulación DESACTIVADA");
+  }
+  else if (action == "clear_logs") {
+    logIndex = 0; logCount = 0;
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, true, empty);
+    addLog("info", "Logs limpiados");
+  }
+  else if (action == "ping") {
+    DynamicJsonDocument data(32);
+    data["pong"] = true;
+    respondAdminCommand(id, true, data);
+  }
+  else {
+    DynamicJsonDocument empty(64);
+    respondAdminCommand(id, false, empty, "Unknown action: " + action);
+  }
 }
 
-// ==================== CALLBACK MQTT ====================
 void callback(char* topic, byte* payload, unsigned int length) {
   String msg = "";
   for (int i = 0; i < length; i++) msg += (char)payload[i];
   String topicStr = String(topic);
-
   if (topicStr == "fxi/comandos") {
     if (msg == "TOGGLE") {
       if (estadoActual == REPOSO) iniciarRutina("Comando Manual MQTT");
       else detenerRutina();
     }
-  } 
+  }
   else if (topicStr == "fxi/simular") {
-    if (msg == "FUEGO_ON") {
-      simularFuego = true;
-      addLog("warn", "Simulación ACTIVADA");
-    } else if (msg == "FUEGO_OFF") {
-      simularFuego = false;
-      addLog("info", "Simulación DESACTIVADA");
-    }
+    if (msg == "FUEGO_ON") simularFuego = true;
+    else if (msg == "FUEGO_OFF") simularFuego = false;
   }
   else if (topicStr == "fxi/admin/cmd") {
     DynamicJsonDocument doc(256);
@@ -255,10 +247,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
     int id = doc["id"] | 0;
     String action = doc["action"] | "";
-    if (action.length() == 0) {
-      addLog("warn", "Comando admin sin acción");
-      return;
-    }
+    if (action.length() == 0) return;
     processAdminCommand(id, action);
   }
 }
@@ -278,8 +267,8 @@ void handleEstado() {
   String json = "{";
   json += "\"temp\":" + String(tempGuardada) + ",";
   json += "\"hum\":" + String(humGuardada) + ",";
-  json += "\"rssi\":" + String(rssiGuardado);
-  json += "}";
+  json += "\"gas\":" + String(gasValue) + ",";
+  json += "\"rssi\":" + String(rssiGuardado) + "}";
   server.send(200, "application/json", json);
 }
 
@@ -300,22 +289,14 @@ void handleInfo() {
   size_t heapTotal = ESP.getHeapSize();
   size_t heapFree = ESP.getFreeHeap();
   doc["heap_percent"] = (heapTotal > 0) ? (heapFree * 100) / heapTotal : 0;
-  const size_t littlefsTotal = 131072;
-  const size_t littlefsUsed = littlefsTotal * 30 / 100;
-  uint8_t littlefsPercent = 30;
-  doc["littlefs_percent"] = littlefsPercent;
+  doc["littlefs_percent"] = 30;
   size_t sketchSize = ESP.getSketchSize();
   size_t sketchTotal = 1992294;
-  size_t sketchPercent = (sketchSize * 100) / sketchTotal;
-  doc["sketch_percent"] = sketchPercent;
-  size_t totalStorage = sketchTotal + littlefsTotal;
-  size_t usedStorage = sketchSize + littlefsUsed;
-  size_t freeStorage = totalStorage - usedStorage;
-  doc["free_percent"] = (freeStorage * 100) / totalStorage;
+  doc["sketch_percent"] = (sketchSize * 100) / sketchTotal;
   doc["ip_ap"] = WiFi.softAPIP().toString();
   doc["ip_sta"] = WiFi.localIP().toString();
   doc["mqtt_status"] = client.connected() ? "conectado" : "desconectado";
-  doc["mdns"] = "fluxaignis.local";   // Nombre unificado
+  doc["mdns"] = "fluxaignis.local";
   String json;
   serializeJson(doc, json);
   server.send(200, "application/json", json);
@@ -343,8 +324,7 @@ void handleCmd() {
     return;
   }
   String action = server.arg("action");
-  addLog("info", "Comando HTTP recibido: " + action);
-
+  addLog("info", "Comando HTTP: " + action);
   if (action == "restart") {
     server.send(200, "text/plain", "OK");
     delay(100);
@@ -354,12 +334,9 @@ void handleCmd() {
     server.send(200, "text/plain", "OK");
   } else if (action == "toggle_sim") {
     simularFuego = !simularFuego;
-    addLog("warn", simularFuego ? "Simulación de fuego ACTIVADA" : "Simulación DESACTIVADA");
     server.send(200, "text/plain", "OK");
   } else if (action == "clear_logs") {
-    logIndex = 0;
-    logCount = 0;
-    addLog("info", "Logs limpiados por comando");
+    logIndex = 0; logCount = 0;
     server.send(200, "text/plain", "OK");
   } else if (action == "update_fw") {
     server.send(200, "text/plain", "OK");
@@ -372,34 +349,28 @@ void handleCmd() {
   }
 }
 
-// ==================== ACTUALIZACIONES (OTA y HTML) ====================
+// ==================== ACTUALIZACIONES OTA Y HTML ====================
 void guardarVersion(String version) {
   File f = LittleFS.open("/version.txt", "w");
   if (f) {
     f.print(version);
     f.close();
-    addLog("info", "Versión guardada en LittleFS: " + version);
-  } else {
-    addLog("error", "Error al guardar versión");
+    addLog("info", "Versión guardada: " + version);
   }
 }
 
 String leerVersion() {
   File f = LittleFS.open("/version.txt", "r");
-  if (!f) {
-    addLog("warn", "No se encontró version.txt, se usará AUTO_VERSION");
-    return "AUTO_VERSION";
-  }
+  if (!f) return "AUTO_VERSION";
   String v = f.readString();
   v.trim();
   f.close();
-  addLog("info", "Versión leída de LittleFS: " + v);
   return v;
 }
 
 bool actualizarHTML() {
   if (WiFi.status() != WL_CONNECTED) return false;
-  addLog("info", "Descargando nueva versión del HTML (forzada)...");
+  addLog("info", "Descargando nueva versión del HTML...");
   HTTPClient http;
   http.setTimeout(10000);
   http.begin(espClient, urlHTML);
@@ -411,41 +382,30 @@ bool actualizarHTML() {
   }
   String nuevoHTML = http.getString();
   http.end();
-  if (nuevoHTML.length() < 100) {
-    addLog("error", "HTML descargado demasiado pequeño, ignorando");
-    return false;
-  }
+  if (nuevoHTML.length() < 100) return false;
   File f = LittleFS.open("/index.html", "w");
-  if (!f) {
-    addLog("error", "Error al guardar HTML");
-    return false;
-  }
+  if (!f) return false;
   f.print(nuevoHTML);
   f.close();
-  addLog("info", "HTML actualizado correctamente (forzado)");
+  addLog("info", "HTML actualizado");
   return true;
 }
 
 bool isNewerVersion(String remote, String current) {
-  remote.replace("v", "");
-  current.replace("v", "");
-  int rMajor, rMinor, rPatch;
-  int cMajor, cMinor, cPatch;
-  if (sscanf(remote.c_str(), "%d.%d.%d", &rMajor, &rMinor, &rPatch) != 3) return false;
-  if (sscanf(current.c_str(), "%d.%d.%d", &cMajor, &cMinor, &cPatch) != 3) return true;
-  if (rMajor > cMajor) return true;
-  if (rMajor < cMajor) return false;
-  if (rMinor > cMinor) return true;
-  if (rMinor < cMinor) return false;
-  return (rPatch > cPatch);
+  remote.replace("v", ""); current.replace("v", "");
+  int rMaj, rMin, rPat, cMaj, cMin, cPat;
+  if (sscanf(remote.c_str(), "%d.%d.%d", &rMaj, &rMin, &rPat) != 3) return false;
+  if (sscanf(current.c_str(), "%d.%d.%d", &cMaj, &cMin, &cPat) != 3) return true;
+  if (rMaj > cMaj) return true;
+  if (rMaj < cMaj) return false;
+  if (rMin > cMin) return true;
+  if (rMin < cMin) return false;
+  return (rPat > cPat);
 }
 
 void chequearActualizacionGitHub() {
-  if (WiFi.status() != WL_CONNECTED) {
-    addLog("warn", "Sin conexión WiFi externa. Se omite chequeo OTA de GitHub.");
-    return;
-  }
-  addLog("info", "Chequeando actualizaciones en GitHub...");
+  if (WiFi.status() != WL_CONNECTED) return;
+  addLog("info", "Chequeando actualizaciones...");
   HTTPClient http;
   http.setTimeout(10000);
   http.begin(espClient, urlVersion);
@@ -454,9 +414,8 @@ void chequearActualizacionGitHub() {
     String versionGitHub = http.getString();
     versionGitHub.trim();
     String currentVersion = leerVersion();
-    addLog("info", "Versión actual: " + currentVersion + " | GitHub: " + versionGitHub);
     if (isNewerVersion(versionGitHub, currentVersion) && versionGitHub.length() > 0) {
-      addLog("info", "¡Nueva versión detectada! Iniciando OTA...");
+      addLog("info", "Nueva versión detectada. Iniciando OTA...");
       httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
       t_httpUpdate_return ret = httpUpdate.update(espClient, urlFirmware);
       switch (ret) {
@@ -469,16 +428,15 @@ void chequearActualizacionGitHub() {
         case HTTP_UPDATE_OK:
           guardarVersion(versionGitHub);
           actualizarHTML();
-          addLog("success", "¡Actualización completada! Reiniciando...");
+          addLog("success", "Actualización completada. Reiniciando...");
           ESP.restart();
           break;
       }
     } else {
-      addLog("info", "El firmware ya está en la última versión (o la remota es menor).");
+      addLog("info", "Firmware actualizado.");
     }
   } else {
-    addLog("error", "Error al consultar versión en GitHub. Código: " + String(httpCode));
-    if (httpCode == -1) addLog("error", "Posible fallo de conexión o DNS. Verifica la URL.");
+    addLog("error", "Error al consultar versión: " + String(httpCode));
   }
   http.end();
 }
@@ -492,23 +450,22 @@ void setup() {
   pinMode(PIN_BOMBA, OUTPUT); digitalWrite(PIN_BOMBA, LOW);
   pinMode(PIN_ROJO, OUTPUT); pinMode(PIN_VERDE, OUTPUT); pinMode(PIN_AZUL, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT); noTone(PIN_BUZZER);
+  pinMode(PIN_MQ2, INPUT);  // MQ-2 analógico
 
   ESP32PWM::allocateTimer(0); ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2); ESP32PWM::allocateTimer(3);
   servoHorizontal.setPeriodHertz(50); servoHorizontal.attach(PIN_SERVO_H, 500, 2400);
   servoVertical.setPeriodHertz(50); servoVertical.attach(PIN_SERVO_V, 500, 2400);
-  servoHorizontal.write(SERVO_H_NEUTRAL); servoVertical.write(20);
+  servoHorizontal.write(SERVO_H_STOP); servoVertical.write(20);
 
   if (!LittleFS.begin()) {
     Serial.println("Error al montar LittleFS");
-    addLog("error", "Error al montar LittleFS");
     return;
   }
 
   FIRMWARE_VERSION = leerVersion();
   addLog("info", "Firmware version: " + FIRMWARE_VERSION);
 
-  // Hotspot AP
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAPConfig(apIP, apGateway, apSubnet);
   WiFi.softAP(ap_ssid, ap_password);
@@ -517,15 +474,11 @@ void setup() {
   dnsServer.start(53, "*", apIP);
   addLog("info", "DNS Captive Portal activado");
 
-  // Configuración inicial mDNS (ambas interfaces)
   if (MDNS.begin("fluxaignis")) {
     MDNS.addService("http", "tcp", 80);
     addLog("info", "✅ mDNS iniciado correctamente como fluxaignis.local");
-  } else {
-    addLog("error", "❌ Error al iniciar mDNS");
   }
 
-  // WiFi externa
   WiFi.begin(ssid, password);
   int intentos = 0;
   while (WiFi.status() != WL_CONNECTED && intentos < 20) {
@@ -533,35 +486,27 @@ void setup() {
     Serial.print(".");
     intentos++;
   }
-
   if (WiFi.status() == WL_CONNECTED) {
     addLog("info", "WiFi externo conectado - IP: " + WiFi.localIP().toString());
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     espClient.setInsecure();
     client.setServer(mqtt_server, 8883);
     client.setCallback(callback);
-
-    // Re-registrar mDNS para que se anuncie correctamente en la interfaz STA
     MDNS.end();
     if (MDNS.begin("fluxaignis")) {
       MDNS.addService("http", "tcp", 80);
-      addLog("info", "mDNS re-registrado correctamente en interfaz STA");
-    } else {
-      addLog("warn", "Error al re-registrar mDNS en interfaz STA");
+      addLog("info", "mDNS re-registrado en STA");
     }
-
     chequearActualizacionGitHub();
   } else {
-    addLog("warn", "No se pudo conectar a red externa. Modo offline + hotspot.");
+    addLog("warn", "Modo offline + hotspot.");
   }
 
-  // ArduinoOTA (el nombre puede ser diferente, no interfiere con el mDNS principal)
   ArduinoOTA.setHostname("fluxaignis_ota");
   ArduinoOTA.setPassword("12345678");
   ArduinoOTA.begin();
-  addLog("info", "OTA clásico iniciado (hostname: fluxaignis_ota).");
+  addLog("info", "OTA clásico iniciado");
 
-  // Servidor web
   server.on("/", handleRoot);
   server.on("/estado", handleEstado);
   server.on("/toggleServo", handleToggle);
@@ -602,17 +547,15 @@ void loop() {
       if (cmd == "help") {
         Serial.println("Comandos: update_fw, fw, update_html, html, restart, help");
       } else if (cmd == "update_fw" || cmd == "fw") {
-        Serial.println("Forzando actualización OTA del firmware...");
         chequearActualizacionGitHub();
       } else if (cmd == "update_html" || cmd == "html") {
-        Serial.println("Forzando actualización del HTML...");
         actualizarHTML();
       } else if (cmd == "restart") {
-        Serial.println("Reiniciando ESP32 en 1 segundo...");
+        Serial.println("Reiniciando...");
         delay(1000);
         ESP.restart();
       } else {
-        Serial.println("Comando no reconocido. Usa 'help' para ver opciones.");
+        Serial.println("Comando no reconocido. Usa 'help'.");
       }
     }
   }
@@ -624,7 +567,7 @@ void loop() {
         client.subscribe("fxi/comandos");
         client.subscribe("fxi/simular");
         client.subscribe("fxi/admin/cmd");
-        addLog("info", "MQTT conectado (incluyendo admin)");
+        addLog("info", "MQTT conectado (admin incluido)");
       }
     } else {
       client.loop();
@@ -642,16 +585,25 @@ void loop() {
     ultimoTiempoDHT = ahora;
   }
 
+  // Leer MQ-2 (gas)
+  gasValue = analogRead(PIN_MQ2);
   rssiGuardado = WiFi.RSSI();
 
-  // Detección de fuego
+  // Detección de fuego (KY-026)
   int lecturaLlama = (simularFuego) ? 300 : analogRead(PIN_LLAMA);
   if (lecturaLlama < 50) lecturaLlama = 4095;
-  if (estadoActual == REPOSO && lecturaLlama < UMBRAL_FUEGO) {
-    String motivo = simularFuego ? "FUEGO SIMULADO (MQTT)" : "FUEGO DETECTADO (KY-026)";
+  bool hayFuego = (lecturaLlama < UMBRAL_FUEGO);
+  bool hayGas = (gasValue > UMBRAL_GAS);
+  bool emergenciaPorSensores = hayFuego || hayGas;
+
+  if (estadoActual == REPOSO && emergenciaPorSensores) {
+    String motivo;
+    if (hayFuego && hayGas) motivo = "FUEGO Y GAS DETECTADOS";
+    else if (hayFuego) motivo = "FUEGO DETECTADO (KY-026)";
+    else motivo = "GAS COMBUSTIBLE DETECTADO (MQ-2)";
     iniciarRutina(motivo);
     if (!emergenciaEnviada) {
-      enviarNotificacionMQTT(motivo, tempGuardada);
+      enviarNotificacionMQTT(motivo, tempGuardada, gasValue);
       emergenciaEnviada = true;
     }
   }
@@ -659,7 +611,7 @@ void loop() {
   // Temperatura crítica
   if (tempGuardada >= TEMP_CRITICA) {
     if (!emergenciaEnviada) {
-      enviarNotificacionMQTT("CALOR CRITICO", tempGuardada);
+      enviarNotificacionMQTT("CALOR CRITICO", tempGuardada, gasValue);
       emergenciaEnviada = true;
       iniciarRutina("Temperatura crítica superada");
     }
@@ -680,47 +632,50 @@ void loop() {
     setColor(r, g, b);
   }
 
-  // Máquina de estados del servo
+  // Máquina de estados del servo (modo 360)
   switch (estadoActual) {
     case REPOSO: break;
     case ESPERANDO_AGUA:
       if (ahora - cronometroRutina >= WATER_DELAY_MS) {
         addLog("info", "Agua lista, iniciando barrido");
-        servoHorizontal.write(SERVO_H_NEUTRAL);
+        servoHorizontal.write(SERVO_H_STOP);
         delay(50);
         cronometroRutina = ahora;
         estadoActual = GIRANDO_IZQ;
       }
       break;
     case GIRANDO_IZQ:
-      servoHorizontal.write(70);
+      servoHorizontal.write(0);   // Giro izquierda (ajustar)
       if (ahora - cronometroRutina >= TIEMPO_90_IZQ) {
         cronometroRutina = ahora;
         estadoActual = GIRANDO_DER;
       }
       break;
     case GIRANDO_DER:
-      servoHorizontal.write(110);
+      servoHorizontal.write(180); // Giro derecha
       if (ahora - cronometroRutina >= (TIEMPO_90_DER * 2)) {
         cronometroRutina = ahora;
         estadoActual = VOLVIENDO_CENTRO;
       }
       break;
     case VOLVIENDO_CENTRO:
-      servoHorizontal.write(70);
+      servoHorizontal.write(0);   // Regresar (o 180 según diseño)
       if (ahora - cronometroRutina >= TIEMPO_RETORNO) {
         detenerRutina();
       }
       break;
   }
 
-  // Publicación MQTT (datos, RSSI)
+  // Publicación MQTT (datos, RSSI y gas)
   if (WiFi.status() == WL_CONNECTED && client.connected()) {
     if (ahora - cronometroDatos > 2000) {
       cronometroDatos = ahora;
       String hStr = isnan(humGuardada) ? "0" : String(humGuardada);
-      String payload = "{\"temp\":" + String(tempGuardada) + ", \"hum\":" + hStr + "}";
+      String payload = "{\"temp\":" + String(tempGuardada) + ",\"hum\":" + hStr + ",\"gas\":" + String(gasValue) + "}";
       client.publish("fxi/datos", payload.c_str());
+      // Publicar solo gas en topic aparte
+      String gasPayload = "{\"gas\":" + String(gasValue) + "}";
+      client.publish("fxi/gas", gasPayload.c_str());
     }
     if (ahora - cronometroRSSI > 5000) {
       cronometroRSSI = ahora;
@@ -729,18 +684,16 @@ void loop() {
     }
   }
 
-  // Chequeo periódico de OTA
+  // Chequeo periódico OTA
   if (ahora - ultimoChequeoOTA >= INTERVALO_OTA) {
     ultimoChequeoOTA = ahora;
     chequearActualizacionGitHub();
   }
 
-  // Actualización periódica del HTML (cada 24h)
+  // Actualización HTML diaria
   static unsigned long ultimaActualizacionHTML = 0;
   if (ahora - ultimaActualizacionHTML >= 86400000UL) {
-    if (WiFi.status() == WL_CONNECTED) {
-      actualizarHTML();
-    }
+    if (WiFi.status() == WL_CONNECTED) actualizarHTML();
     ultimaActualizacionHTML = ahora;
   }
 }
