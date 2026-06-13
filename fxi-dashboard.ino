@@ -33,6 +33,12 @@ void addLog(String level, String message) {
   logIndex = (logIndex + 1) % MAX_LOGS;
   if (logCount < MAX_LOGS) logCount++;
   Serial.printf("[%s] %s\n", level.c_str(), message.c_str());
+
+  // Publicar el log en MQTT si el cliente está conectado
+  if (client.connected()) {
+    String logPayload = "{\"timestamp\":" + String(millis()) + ",\"level\":\"" + level + "\",\"message\":\"" + message + "\"}";
+    client.publish("fxi/logs", logPayload.c_str());
+  }
 }
 
 // ==================== GITHUB OTA ====================
@@ -560,10 +566,18 @@ void setup() {
   servoVertical.setPeriodHertz(50); servoVertical.attach(PIN_SERVO_V, 500, 2400);
   servoHorizontal.write(SERVO_CENTRO); servoVertical.write(20);
 
-  if (!LittleFS.begin()) {
-    Serial.println("Error al montar LittleFS");
-    addLog("error", "Error al montar LittleFS");
-    return;
+  // Inicializar LittleFS con formateo automático si falla
+  bool littlefsOk = LittleFS.begin(false);
+  if (!littlefsOk) {
+    addLog("error", "Error al montar LittleFS. Formateando...");
+    littlefsOk = LittleFS.begin(true);
+    if (littlefsOk) {
+      addLog("info", "LittleFS formateado correctamente. Reiniciando...");
+      ESP.restart();
+    } else {
+      addLog("error", "No se pudo formatear LittleFS. El sistema no funcionará correctamente.");
+      return;
+    }
   }
 
   FIRMWARE_VERSION = leerVersion();
