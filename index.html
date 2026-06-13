@@ -595,20 +595,29 @@
                         <div class="flame-status" id="flameStatus">Estado: Normal</div>
                         <div style="font-size: 11px; opacity: 0.7;">Detección óptica de incendios</div>
                     </div>
+                    <!-- Nueva tarjeta de Humedad (se queda igual) -->
                     <div class="glass-card">
-                        <div class="card-title">Humedad</div>
+                        <div class="card-title">💧 Humedad</div>
                         <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
                     </div>
+                    <!-- NUEVA TARJETA: Gas / Humo (MQ-2) -->
                     <div class="glass-card">
-                        <div class="card-title">Señal RSSI</div>
+                        <div class="card-title">🌫️ Nivel de Humo/Gas</div>
+                        <div class="val-med" id="gas-val">--<span class="unit">ppm</span></div>
+                    </div>
+                    <!-- Tarjeta de Señal RSSI (movida aquí, debajo de Gas) -->
+                    <div class="glass-card">
+                        <div class="card-title">📡 Señal RSSI</div>
                         <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
                     </div>
+                    <!-- Tarjeta de Estado Red (se queda igual) -->
                     <div class="glass-card">
-                        <div class="card-title">Estado Red</div>
+                        <div class="card-title">🌐 Estado Red</div>
                         <div id="net-status" style="color: var(--accent-cyan);">--</div>
                     </div>
+                    <!-- Barrido de Radar, Reconectar, Resetear -->
                     <div class="glass-card">
-                        <div class="card-title">Barrido de Radar</div>
+                        <div class="card-title">🔄 Barrido de Radar</div>
                         <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
                     </div>
                     <div class="glass-card" style="cursor: pointer;" id="reconnectBtn">
@@ -802,6 +811,7 @@
             actualizarTemperatura(data.temp);
             actualizarHumedad(data.hum);
             actualizarRSSI(data.rssi);
+            actualizarGas(data.gas);
             addDataPoint(data.temp, data.hum);
         }
 
@@ -1042,6 +1052,12 @@
             if (rssi > -60) el.style.color = '#81C784';
             else if (rssi > -75) el.style.color = '#FFD54F';
             else el.style.color = '#F06292';
+        }
+
+        // Nueva función para actualizar el valor de Gas
+        function actualizarGas(gas) {
+            const gasVal = parseInt(gas);
+            document.getElementById('gas-val').innerHTML = `${isNaN(gasVal) ? '--' : gasVal}<span class="unit">ppm</span>`;
         }
 
         // ========== ADMIN GENÉRICO (usa modo actual) ==========
@@ -1287,7 +1303,7 @@
                 mqttClient.subscribe('fxi/emergencia');
                 mqttClient.subscribe('fxi/simular');
                 mqttClient.subscribe('fxi/admin/resp');
-                mqttClient.subscribe('fxi/logs');   // <-- NUEVO: logs en tiempo real
+                mqttClient.subscribe('fxi/logs');
                 addSystemLog("✅ MQTT conectado a HiveMQ Cloud", 'info');
                 if (forcedMode !== 'http') {
                     setMode('mqtt');
@@ -1311,6 +1327,9 @@
                             actualizarTemperatura(data.temp);
                             actualizarHumedad(data.hum);
                             addDataPoint(data.temp, data.hum);
+                        }
+                        if (data.gas !== undefined) {
+                            actualizarGas(data.gas);
                         }
                     } else if (topicStr === 'fxi/rssi') {
                         const data = JSON.parse(msg);
@@ -1337,7 +1356,6 @@
                         if (msg === 'FUEGO_ON') simulationActive = true;
                         else if (msg === 'FUEGO_OFF') simulationActive = false;
                     } else if (topicStr === 'fxi/logs') {
-                        // Recibir logs en tiempo real desde el ESP32
                         const data = JSON.parse(msg);
                         const level = data.level || 'info';
                         const message = data.message || '';
@@ -1552,4 +1570,3 @@
     </script>
 </body>
 </html>
-    
