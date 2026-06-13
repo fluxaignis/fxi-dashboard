@@ -35,16 +35,15 @@ void addLog(String level, String message) {
   Serial.printf("[%s] %s\n", level.c_str(), message.c_str());
 }
 
-// ==================== CONFIGURACIÓN DE GITHUB OTA ====================
+// ==================== GITHUB OTA ====================
 String FIRMWARE_VERSION = "AUTO_VERSION";
 const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/version.txt";
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/firmware.bin";
 const char* urlHTML = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/index.html";
-
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 60001;      // 1 minuto (pruebas)
+const unsigned long INTERVALO_OTA = 60001;
 
-// ==================== MAPEO DE PINES ====================
+// ==================== PINES ====================
 #define DHTPIN 27
 #define DHTTYPE DHT11
 #define PIN_SERVO_H 15          // Servo horizontal (360°)
@@ -53,8 +52,9 @@ const unsigned long INTERVALO_OTA = 60001;      // 1 minuto (pruebas)
 #define PIN_ROJO 13
 #define PIN_VERDE 12
 #define PIN_AZUL 14
-#define PIN_LLAMA 35            // KY-026 (digital opcional, aquí analógico)
-#define PIN_MQ2 34              // Sensor MQ-2 (salida analógica)
+#define PIN_LLAMA_IZQ 35        // KY-026 izquierdo (analógico)
+#define PIN_LLAMA_DER 36        // KY-026 derecho (analógico)
+#define PIN_MQ2 34              // Sensor MQ-2 (analógico)
 #define PIN_BUZZER 33
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -66,28 +66,39 @@ WebServer server(80);
 DNSServer dnsServer;
 
 // ==================== ESTADOS Y TIEMPOS DE LA RUTINA ====================
-enum EstadoSistema { REPOSO, ESPERANDO_AGUA, GIRANDO_IZQ, GIRANDO_DER, VOLVIENDO_CENTRO };
+enum EstadoSistema { REPOSO, ESPERANDO_AGUA, APUNTANDO, EXTINGUIENDO };
 EstadoSistema estadoActual = REPOSO;
-const int SERVO_H_STOP = 90;            // Para servo 360, 90 = parado
-unsigned long TIEMPO_90_IZQ = 750;      // Tiempo para girar 90° (ajustar)
-unsigned long TIEMPO_90_DER = 780;
-unsigned long TIEMPO_RETORNO = 500;
-unsigned long cronometroRutina = 0;
-const unsigned long WATER_DELAY_MS = 1000;
 
-// ==================== VARIABLES DE SEGURIDAD Y SENSORES ====================
-const int UMBRAL_FUEGO = 500;           // Umbral para KY-026 (valor analógico)
-const int UMBRAL_GAS = 500;             // Umbral para MQ-2 (ajustar según calibración)
+// Ángulos para servo 360: 90 = parado, 0 = máximo un sentido, 180 = máximo opuesto.
+// Usaremos posiciones para apuntar (simulando ángulo fijo durante unos segundos).
+const int SERVO_IZQ = 0;      // Giro continuo hacia la izquierda
+const int SERVO_DER = 180;    // Giro continuo hacia la derecha
+const int SERVO_CENTRO = 90;   // Parado
+
+unsigned long TIEMPO_APUNTAR = 2000;   // Tiempo que se mantiene girando hacia el lado (ms)
+unsigned long cronometroRutina = 0;
+const unsigned long WATER_DELAY_MS = 1000; // Bomba encendida 1s antes de mover servo
+
+int ladoEmergencia = 0; // 0 = centro, 1 = izquierda, 2 = derecha, 3 = ambos (barrido)
+bool emergenciaActiva = false;
+
+// ==================== VARIABLES DE SEGURIDAD ====================
+const int UMBRAL_FUEGO = 500;        // Para KY-026 (cuanto más bajo, más cerca)
+const int UMBRAL_GAS = 500;          // Para MQ-2 (ajustar)
 const float TEMP_CRITICA = 40.0;
 bool emergenciaEnviada = false;
 float tempGuardada = 25.0;
 float humGuardada = 50.0;
 int rssiGuardado = -99;
-int gasValue = 0;                       // Lectura analógica del MQ-2
+int gasValue = 0;
 unsigned long cronometroDatos = 0;
 unsigned long cronometroRSSI = 0;
 unsigned long ultimoTiempoDHT = 0;
 bool simularFuego = false;
+
+// Lectura de sensores de llama
+int llamaIzq = 4095;
+int llamaDer = 4095;
 
 // ==================== CREDENCIALES ====================
 const char* ssid = "NauticaNet";
@@ -97,7 +108,7 @@ const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -14400;
 const int daylightOffset_sec = 0;
 
-// ==================== CONFIGURACIÓN DEL PUNTO DE ACCESO ====================
+// ==================== AP ====================
 const char* ap_ssid = "FluxaIgnis TECH";
 const char* ap_password = "";
 IPAddress apIP(192, 168, 1, 1);
@@ -123,23 +134,27 @@ void enviarNotificacionMQTT(String motivo, float temp, int gas = -1) {
   client.publish("fxi/emergencia", payload.c_str());
 }
 
-void iniciarRutina(String motivo) {
+void iniciarRutina(int lado, String motivo) {
   if (estadoActual == REPOSO) {
-    addLog("alert", "¡EMERGENCIA! Iniciando maniobra de extinción... Motivo: " + motivo);
+    addLog("alert", "¡EMERGENCIA! " + motivo + " - Lado: " + (lado == 1 ? "IZQUIERDO" : (lado == 2 ? "DERECHO" : "CENTRO")));
     digitalWrite(PIN_BOMBA, HIGH);
+    ladoEmergencia = lado;
     cronometroRutina = millis();
     estadoActual = ESPERANDO_AGUA;
+    emergenciaActiva = true;
   }
 }
 
 void detenerRutina() {
-  servoHorizontal.write(SERVO_H_STOP);
+  servoHorizontal.write(SERVO_CENTRO);
   digitalWrite(PIN_BOMBA, LOW);
   estadoActual = REPOSO;
+  ladoEmergencia = 0;
+  emergenciaActiva = false;
   addLog("info", "Rutina detenida.");
 }
 
-// ==================== MQTT ADMIN ====================
+// ==================== MQTT ADMIN (sin cambios, solo se copia) ====================
 void respondAdminCommand(int id, bool success, JsonDocument &data, const String &errorMsg = "") {
   if (!client.connected()) return;
   DynamicJsonDocument resp(1024);
@@ -230,7 +245,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   String topicStr = String(topic);
   if (topicStr == "fxi/comandos") {
     if (msg == "TOGGLE") {
-      if (estadoActual == REPOSO) iniciarRutina("Comando Manual MQTT");
+      if (estadoActual == REPOSO) iniciarRutina(0, "Comando Manual MQTT (centro)");
       else detenerRutina();
     }
   }
@@ -241,10 +256,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   else if (topicStr == "fxi/admin/cmd") {
     DynamicJsonDocument doc(256);
     DeserializationError error = deserializeJson(doc, msg);
-    if (error) {
-      addLog("error", "Error al parsear comando admin: " + String(error.c_str()));
-      return;
-    }
+    if (error) return;
     int id = doc["id"] | 0;
     String action = doc["action"] | "";
     if (action.length() == 0) return;
@@ -268,12 +280,14 @@ void handleEstado() {
   json += "\"temp\":" + String(tempGuardada) + ",";
   json += "\"hum\":" + String(humGuardada) + ",";
   json += "\"gas\":" + String(gasValue) + ",";
+  json += "\"llama_izq\":" + String(llamaIzq) + ",";
+  json += "\"llama_der\":" + String(llamaDer) + ",";
   json += "\"rssi\":" + String(rssiGuardado) + "}";
   server.send(200, "application/json", json);
 }
 
 void handleToggle() {
-  if (estadoActual == REPOSO) iniciarRutina("Comando Web");
+  if (estadoActual == REPOSO) iniciarRutina(0, "Comando Web (centro)");
   else detenerRutina();
   server.send(200, "text/plain", (estadoActual != REPOSO) ? "ON" : "OFF");
 }
@@ -349,7 +363,7 @@ void handleCmd() {
   }
 }
 
-// ==================== ACTUALIZACIONES OTA Y HTML ====================
+// ==================== ACTUALIZACIONES (OTA y HTML) ====================
 void guardarVersion(String version) {
   File f = LittleFS.open("/version.txt", "w");
   if (f) {
@@ -450,13 +464,15 @@ void setup() {
   pinMode(PIN_BOMBA, OUTPUT); digitalWrite(PIN_BOMBA, LOW);
   pinMode(PIN_ROJO, OUTPUT); pinMode(PIN_VERDE, OUTPUT); pinMode(PIN_AZUL, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT); noTone(PIN_BUZZER);
-  pinMode(PIN_MQ2, INPUT);  // MQ-2 analógico
+  pinMode(PIN_MQ2, INPUT);
+  pinMode(PIN_LLAMA_IZQ, INPUT);
+  pinMode(PIN_LLAMA_DER, INPUT);
 
   ESP32PWM::allocateTimer(0); ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2); ESP32PWM::allocateTimer(3);
   servoHorizontal.setPeriodHertz(50); servoHorizontal.attach(PIN_SERVO_H, 500, 2400);
   servoVertical.setPeriodHertz(50); servoVertical.attach(PIN_SERVO_V, 500, 2400);
-  servoHorizontal.write(SERVO_H_STOP); servoVertical.write(20);
+  servoHorizontal.write(SERVO_CENTRO); servoVertical.write(20);
 
   if (!LittleFS.begin()) {
     Serial.println("Error al montar LittleFS");
@@ -476,7 +492,7 @@ void setup() {
 
   if (MDNS.begin("fluxaignis")) {
     MDNS.addService("http", "tcp", 80);
-    addLog("info", "✅ mDNS iniciado correctamente como fluxaignis.local");
+    addLog("info", "mDNS iniciado como fluxaignis.local");
   }
 
   WiFi.begin(ssid, password);
@@ -523,11 +539,11 @@ void setup() {
 
   Serial.println("\n=== Comandos disponibles por Serial ===");
   Serial.println("  help      - Muestra esta ayuda");
-  Serial.println("  update_fw - Forzar actualización OTA del firmware (código)");
+  Serial.println("  update_fw - Forzar OTA del firmware");
   Serial.println("  fw        - (abreviatura)");
-  Serial.println("  update_html - Forzar actualización del archivo HTML");
+  Serial.println("  update_html - Forzar actualización del HTML");
   Serial.println("  html      - (abreviatura)");
-  Serial.println("  restart   - Reiniciar el ESP32");
+  Serial.println("  restart   - Reiniciar ESP32");
   Serial.println("========================================\n");
 }
 
@@ -537,26 +553,21 @@ void loop() {
   server.handleClient();
   ArduinoOTA.handle();
 
-  // Comandos por Serial
+  // Comandos seriales
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
     cmd.toLowerCase();
-    if (cmd.length() > 0) {
-      addLog("info", "Comando serial recibido: " + cmd);
-      if (cmd == "help") {
-        Serial.println("Comandos: update_fw, fw, update_html, html, restart, help");
-      } else if (cmd == "update_fw" || cmd == "fw") {
-        chequearActualizacionGitHub();
-      } else if (cmd == "update_html" || cmd == "html") {
-        actualizarHTML();
-      } else if (cmd == "restart") {
-        Serial.println("Reiniciando...");
-        delay(1000);
-        ESP.restart();
-      } else {
-        Serial.println("Comando no reconocido. Usa 'help'.");
-      }
+    if (cmd == "help") {
+      Serial.println("Comandos: update_fw, fw, update_html, html, restart, help");
+    } else if (cmd == "update_fw" || cmd == "fw") {
+      chequearActualizacionGitHub();
+    } else if (cmd == "update_html" || cmd == "html") {
+      actualizarHTML();
+    } else if (cmd == "restart") {
+      ESP.restart();
+    } else {
+      Serial.println("Comando no reconocido.");
     }
   }
 
@@ -567,7 +578,7 @@ void loop() {
         client.subscribe("fxi/comandos");
         client.subscribe("fxi/simular");
         client.subscribe("fxi/admin/cmd");
-        addLog("info", "MQTT conectado (admin incluido)");
+        addLog("info", "MQTT conectado");
       }
     } else {
       client.loop();
@@ -576,7 +587,7 @@ void loop() {
 
   unsigned long ahora = millis();
 
-  // DHT11 cada 2 segundos
+  // DHT11 cada 2s
   if (ahora - ultimoTiempoDHT >= 2000) {
     float t = dht.readTemperature();
     float h = dht.readHumidity();
@@ -585,97 +596,105 @@ void loop() {
     ultimoTiempoDHT = ahora;
   }
 
-  // Leer MQ-2 (gas)
+  // Leer sensores de llama y gas
+  llamaIzq = analogRead(PIN_LLAMA_IZQ);
+  llamaDer = analogRead(PIN_LLAMA_DER);
   gasValue = analogRead(PIN_MQ2);
   rssiGuardado = WiFi.RSSI();
 
-  // Detección de fuego (KY-026)
-  int lecturaLlama = (simularFuego) ? 300 : analogRead(PIN_LLAMA);
-  if (lecturaLlama < 50) lecturaLlama = 4095;
-  bool hayFuego = (lecturaLlama < UMBRAL_FUEGO);
-  bool hayGas = (gasValue > UMBRAL_GAS);
-  bool emergenciaPorSensores = hayFuego || hayGas;
+  // Detección de emergencias (solo si estamos en reposo)
+  if (estadoActual == REPOSO && !emergenciaActiva) {
+    bool fuegoIzq = (llamaIzq < UMBRAL_FUEGO);
+    bool fuegoDer = (llamaDer < UMBRAL_FUEGO);
+    bool hayGas = (gasValue > UMBRAL_GAS);
+    bool calorCritico = (tempGuardada >= TEMP_CRITICA);
+    bool simulacion = simularFuego;
 
-  if (estadoActual == REPOSO && emergenciaPorSensores) {
-    String motivo;
-    if (hayFuego && hayGas) motivo = "FUEGO Y GAS DETECTADOS";
-    else if (hayFuego) motivo = "FUEGO DETECTADO (KY-026)";
-    else motivo = "GAS COMBUSTIBLE DETECTADO (MQ-2)";
-    iniciarRutina(motivo);
-    if (!emergenciaEnviada) {
-      enviarNotificacionMQTT(motivo, tempGuardada, gasValue);
-      emergenciaEnviada = true;
-    }
-  }
+    int lado = 0; // 0=centro, 1=izquierda, 2=derecha, 3=ambos
+    String motivo = "";
 
-  // Temperatura crítica
-  if (tempGuardada >= TEMP_CRITICA) {
-    if (!emergenciaEnviada) {
-      enviarNotificacionMQTT("CALOR CRITICO", tempGuardada, gasValue);
-      emergenciaEnviada = true;
-      iniciarRutina("Temperatura crítica superada");
+    if (simulacion) {
+      lado = 0;
+      motivo = "SIMULACIÓN DE FUEGO (MQTT)";
+    } else if (calorCritico) {
+      lado = 0;
+      motivo = "TEMPERATURA CRÍTICA";
+    } else if (hayGas) {
+      lado = 0;
+      motivo = "GAS COMBUSTIBLE DETECTADO (MQ-2)";
+    } else if (fuegoIzq && fuegoDer) {
+      lado = 3;
+      motivo = "FUEGO EN AMBOS SENSORES";
+    } else if (fuegoIzq) {
+      lado = 1;
+      motivo = "FUEGO IZQUIERDO (KY-026)";
+    } else if (fuegoDer) {
+      lado = 2;
+      motivo = "FUEGO DERECHO (KY-026)";
     }
-  } else if (tempGuardada < TEMP_CRITICA - 2.0) {
+
+    if (lado != 0 || motivo != "") {
+      iniciarRutina(lado, motivo);
+      if (!emergenciaEnviada) {
+        enviarNotificacionMQTT(motivo, tempGuardada, gasValue);
+        emergenciaEnviada = true;
+      }
+    }
+  } else if (tempGuardada < TEMP_CRITICA - 2.0 && !emergenciaActiva) {
     emergenciaEnviada = false;
   }
 
-  // LEDs y buzzer
+  // Control de LEDs y buzzer
   if (estadoActual != REPOSO) {
-    setColor(255, 0, 0);
+    setColor(255, 0, 0);  // Rojo fijo
     if ((ahora / 300) % 2 == 0) tone(PIN_BUZZER, 2000);
     else noTone(PIN_BUZZER);
   } else {
     noTone(PIN_BUZZER);
+    // En reposo, colores según temperatura (simple)
     int r = (tempGuardada >= 35) ? 255 : (tempGuardada >= 30 ? 255 : 0);
     int g = (tempGuardada >= 35) ? 0 : (tempGuardada >= 30 ? 100 : 255);
     int b = (tempGuardada < 30) ? 255 : 0;
     setColor(r, g, b);
   }
 
-  // Máquina de estados del servo (modo 360)
+  // Máquina de estados para la extinción
   switch (estadoActual) {
-    case REPOSO: break;
+    case REPOSO:
+      break;
     case ESPERANDO_AGUA:
       if (ahora - cronometroRutina >= WATER_DELAY_MS) {
-        addLog("info", "Agua lista, iniciando barrido");
-        servoHorizontal.write(SERVO_H_STOP);
-        delay(50);
+        addLog("info", "Agua lista, apuntando servo");
+        // Orientar servo según el lado
+        switch (ladoEmergencia) {
+          case 1: servoHorizontal.write(SERVO_IZQ); break;
+          case 2: servoHorizontal.write(SERVO_DER); break;
+          case 3: // Ambos: podrías hacer un barrido o elegir centro. Aquí centro.
+          default: servoHorizontal.write(SERVO_CENTRO); break;
+        }
         cronometroRutina = ahora;
-        estadoActual = GIRANDO_IZQ;
+        estadoActual = APUNTANDO;
       }
       break;
-    case GIRANDO_IZQ:
-      servoHorizontal.write(0);   // Giro izquierda (ajustar)
-      if (ahora - cronometroRutina >= TIEMPO_90_IZQ) {
-        cronometroRutina = ahora;
-        estadoActual = GIRANDO_DER;
-      }
-      break;
-    case GIRANDO_DER:
-      servoHorizontal.write(180); // Giro derecha
-      if (ahora - cronometroRutina >= (TIEMPO_90_DER * 2)) {
-        cronometroRutina = ahora;
-        estadoActual = VOLVIENDO_CENTRO;
-      }
-      break;
-    case VOLVIENDO_CENTRO:
-      servoHorizontal.write(0);   // Regresar (o 180 según diseño)
-      if (ahora - cronometroRutina >= TIEMPO_RETORNO) {
+    case APUNTANDO:
+      if (ahora - cronometroRutina >= TIEMPO_APUNTAR) {
+        addLog("info", "Deteniendo extinción");
         detenerRutina();
       }
       break;
+    default:
+      break;
   }
 
-  // Publicación MQTT (datos, RSSI y gas)
+  // Publicación MQTT de datos
   if (WiFi.status() == WL_CONNECTED && client.connected()) {
     if (ahora - cronometroDatos > 2000) {
       cronometroDatos = ahora;
       String hStr = isnan(humGuardada) ? "0" : String(humGuardada);
-      String payload = "{\"temp\":" + String(tempGuardada) + ",\"hum\":" + hStr + ",\"gas\":" + String(gasValue) + "}";
+      String payload = "{\"temp\":" + String(tempGuardada) + ",\"hum\":" + hStr + ",\"gas\":" + String(gasValue) +
+                       ",\"llama_izq\":" + String(llamaIzq) + ",\"llama_der\":" + String(llamaDer) + "}";
       client.publish("fxi/datos", payload.c_str());
-      // Publicar solo gas en topic aparte
-      String gasPayload = "{\"gas\":" + String(gasValue) + "}";
-      client.publish("fxi/gas", gasPayload.c_str());
+      client.publish("fxi/gas", String(gasValue).c_str());
     }
     if (ahora - cronometroRSSI > 5000) {
       cronometroRSSI = ahora;
@@ -684,7 +703,7 @@ void loop() {
     }
   }
 
-  // Chequeo periódico OTA
+  // OTA periódica
   if (ahora - ultimoChequeoOTA >= INTERVALO_OTA) {
     ultimoChequeoOTA = ahora;
     chequearActualizacionGitHub();
