@@ -25,22 +25,6 @@ LogEntry logBuffer[MAX_LOGS];
 int logIndex = 0;
 int logCount = 0;
 
-void addLog(String level, String message) {
-  if (message.length() > 100) message = message.substring(0, 97) + "...";
-  logBuffer[logIndex].timestamp = millis();
-  logBuffer[logIndex].level = level;
-  logBuffer[logIndex].message = message;
-  logIndex = (logIndex + 1) % MAX_LOGS;
-  if (logCount < MAX_LOGS) logCount++;
-  Serial.printf("[%s] %s\n", level.c_str(), message.c_str());
-
-  // Publicar el log en MQTT si el cliente está conectado
-  if (client.connected()) {
-    String logPayload = "{\"timestamp\":" + String(millis()) + ",\"level\":\"" + level + "\",\"message\":\"" + message + "\"}";
-    client.publish("fxi/logs", logPayload.c_str());
-  }
-}
-
 // ==================== GITHUB OTA ====================
 String FIRMWARE_VERSION = "AUTO_VERSION";
 const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/version.txt";
@@ -67,9 +51,26 @@ DHT dht(DHTPIN, DHTTYPE);
 Servo servoHorizontal;
 Servo servoVertical;
 WiFiClientSecure espClient;
-PubSubClient client(espClient);
+PubSubClient client(espClient);   // <--- Declarado aquí
 WebServer server(80);
 DNSServer dnsServer;
+
+// ==================== FUNCIÓN addLog (ahora después de declarar client) ====================
+void addLog(String level, String message) {
+  if (message.length() > 100) message = message.substring(0, 97) + "...";
+  logBuffer[logIndex].timestamp = millis();
+  logBuffer[logIndex].level = level;
+  logBuffer[logIndex].message = message;
+  logIndex = (logIndex + 1) % MAX_LOGS;
+  if (logCount < MAX_LOGS) logCount++;
+  Serial.printf("[%s] %s\n", level.c_str(), message.c_str());
+
+  // Publicar el log en MQTT si el cliente está conectado
+  if (client.connected()) {
+    String logPayload = "{\"timestamp\":" + String(millis()) + ",\"level\":\"" + level + "\",\"message\":\"" + message + "\"}";
+    client.publish("fxi/logs", logPayload.c_str());
+  }
+}
 
 // ==================== ESTADOS Y TIEMPOS ====================
 enum EstadoSistema { REPOSO, ESPERANDO_AGUA, APUNTANDO };
