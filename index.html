@@ -1281,11 +1281,13 @@
                 document.getElementById('esp-status').classList.add('status-badge');
                 document.getElementById('net-status').innerHTML = 'MQTT: Conectado';
                 document.getElementById('net-status').style.color = 'var(--text-sec)';
+                // Suscripciones
                 mqttClient.subscribe('fxi/datos');
                 mqttClient.subscribe('fxi/rssi');
                 mqttClient.subscribe('fxi/emergencia');
                 mqttClient.subscribe('fxi/simular');
                 mqttClient.subscribe('fxi/admin/resp');
+                mqttClient.subscribe('fxi/logs');   // <-- NUEVO: logs en tiempo real
                 addSystemLog("✅ MQTT conectado a HiveMQ Cloud", 'info');
                 if (forcedMode !== 'http') {
                     setMode('mqtt');
@@ -1334,6 +1336,12 @@
                     } else if (topicStr === 'fxi/simular') {
                         if (msg === 'FUEGO_ON') simulationActive = true;
                         else if (msg === 'FUEGO_OFF') simulationActive = false;
+                    } else if (topicStr === 'fxi/logs') {
+                        // Recibir logs en tiempo real desde el ESP32
+                        const data = JSON.parse(msg);
+                        const level = data.level || 'info';
+                        const message = data.message || '';
+                        addSystemLog(message, level);
                     }
                 } catch(e) { console.error(e); }
             });
@@ -1535,7 +1543,7 @@
         if (Notification.permission === "default") Notification.requestPermission();
 
         conectarMQTT();
-        addSystemLog("🚀 Panel HÍBRIDO (MQTT+HTTP) cargado. Timeout de comandos = 10s.", 'info');
+        addSystemLog("🚀 Panel HÍBRIDO (MQTT+HTTP) cargado. Timeout de comandos = 10s. Suscripción a logs en tiempo real.", 'info');
         setTimeout(() => {
             if (!mqttConnected && currentMode === 'mqtt' && forcedMode !== 'mqtt') {
                 setMode('http');
@@ -1544,3 +1552,4 @@
     </script>
 </body>
 </html>
+    
