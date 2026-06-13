@@ -15,7 +15,7 @@
 #include <ArduinoJson.h>
 
 // ==================== BUFFER DE LOGS ====================
-#define MAX_LOGS 30
+#define MAX_LOGS 20   // <--- Reducido a 20
 struct LogEntry {
   unsigned long timestamp;
   String level;
@@ -51,13 +51,14 @@ DHT dht(DHTPIN, DHTTYPE);
 Servo servoHorizontal;
 Servo servoVertical;
 WiFiClientSecure espClient;
-PubSubClient client(espClient);   // <--- Declarado aquí
+PubSubClient client(espClient);
 WebServer server(80);
 DNSServer dnsServer;
 
-// ==================== FUNCIÓN addLog (ahora después de declarar client) ====================
+// ==================== FUNCIÓN addLog (corregida) ====================
 void addLog(String level, String message) {
-  if (message.length() > 100) message = message.substring(0, 97) + "...";
+  // Truncar a 80 caracteres
+  if (message.length() > 80) message = message.substring(0, 77) + "...";
   logBuffer[logIndex].timestamp = millis();
   logBuffer[logIndex].level = level;
   logBuffer[logIndex].message = message;
@@ -65,7 +66,6 @@ void addLog(String level, String message) {
   if (logCount < MAX_LOGS) logCount++;
   Serial.printf("[%s] %s\n", level.c_str(), message.c_str());
 
-  // Publicar el log en MQTT si el cliente está conectado
   if (client.connected()) {
     String logPayload = "{\"timestamp\":" + String(millis()) + ",\"level\":\"" + level + "\",\"message\":\"" + message + "\"}";
     client.publish("fxi/logs", logPayload.c_str());
@@ -316,7 +316,7 @@ void processAdminCommand(int id, const String &action) {
     respondAdminCommand(id, true, data);
   }
   else if (action == "get_logs") {
-    DynamicJsonDocument data(6144);
+    DynamicJsonDocument data(8192);   // Buffer aumentado a 8192
     JsonArray logs = data.createNestedArray("logs");
     int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
     for (int i = 0; i < logCount; i++) {
