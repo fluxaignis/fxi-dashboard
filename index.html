@@ -10,7 +10,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        /* ==================== BASE (Mismo estilo de siempre) ==================== */
+        /* ==================== BASE ==================== */
         :root {
             --bg-start: #0B3954;
             --bg-end: #061A2B;
@@ -87,20 +87,9 @@
             grid-template-columns: 1.8fr 1.2fr;
             gap: 25px;
         }
-        .left-column {
-            display: flex;
-            flex-direction: column;
-            gap: 25px;
-        }
-        .right-column {
-            display: flex;
-            flex-direction: column;
-            gap: 25px;
-        }
-        .right-small-cards {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+        /* Ajustes para móvil: una columna */
+        @media (max-width: 850px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
         }
         .glass-card {
             background: var(--glass-bg);
@@ -507,12 +496,17 @@
             font-size: 13px;
         }
         .toast.show { opacity: 1; }
-        @media (max-width: 850px) {
-            .dashboard-grid { grid-template-columns: 1fr; }
-            .right-small-cards { grid-template-columns: 1fr 1fr; }
+        /* Contenedores internos para pares de tarjetas */
+        .double-card-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
         }
         @media (max-width: 500px) {
-            .right-small-cards { grid-template-columns: 1fr; }
+            .double-card-row {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
             .header { flex-direction: column; align-items: flex-start; }
             #theme-toggle { margin-left: 0; }
         }
@@ -534,8 +528,9 @@
         </div>
 
         <div class="dashboard-grid">
-            <!-- Columna izquierda (datos) -->
-            <div class="left-column">
+            <!-- COLUMNA IZQUIERDA (1.8fr) -->
+            <div class="left-column" style="display: flex; flex-direction: column; gap: 25px;">
+                <!-- Temperatura -->
                 <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <div class="card-title">Temperatura</div>
@@ -545,6 +540,26 @@
                     <div style="font-size: 55px;">🌡️</div>
                 </div>
 
+                <!-- Humedad y Nivel de Humo/Gas (juntos en la misma fila) -->
+                <div class="double-card-row">
+                    <div class="glass-card">
+                        <div class="card-title">💧 Humedad</div>
+                        <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">🌫️ Nivel de Humo/Gas</div>
+                        <div class="val-med" id="gas-val">--<span class="unit">ppm</span></div>
+                    </div>
+                </div>
+
+                <!-- Estado (detección óptica de incendios) -->
+                <div class="glass-card flame-card">
+                    <div class="flame-icon normal" id="flameIcon">🔥</div>
+                    <div class="flame-status" id="flameStatus">Estado: Normal</div>
+                    <div style="font-size: 11px; opacity: 0.7;">Detección óptica de incendios</div>
+                </div>
+
+                <!-- Niveles Actuales (barras) -->
                 <div class="glass-card">
                     <div class="card-title">Niveles Actuales</div>
                     <div class="chart-container">
@@ -559,6 +574,7 @@
                     </div>
                 </div>
 
+                <!-- Tendencias (gráfico) -->
                 <div class="glass-card">
                     <div class="card-title">Tendencias (Temp / Humedad)</div>
                     <div class="legend">
@@ -587,48 +603,37 @@
                 </div>
             </div>
 
-            <!-- Columna derecha -->
-            <div class="right-column">
-                <div class="right-small-cards">
-                    <div class="glass-card flame-card" style="grid-column: span 2; text-align: center;">
-                        <div class="flame-icon normal" id="flameIcon">🔥</div>
-                        <div class="flame-status" id="flameStatus">Estado: Normal</div>
-                        <div style="font-size: 11px; opacity: 0.7;">Detección óptica de incendios</div>
-                    </div>
-                    <!-- Nueva tarjeta de Humedad (se queda igual) -->
-                    <div class="glass-card">
-                        <div class="card-title">💧 Humedad</div>
-                        <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
-                    </div>
-                    <!-- NUEVA TARJETA: Gas / Humo (MQ-2) -->
-                    <div class="glass-card">
-                        <div class="card-title">🌫️ Nivel de Humo/Gas</div>
-                        <div class="val-med" id="gas-val">--<span class="unit">ppm</span></div>
-                    </div>
-                    <!-- Tarjeta de Señal RSSI (movida aquí, debajo de Gas) -->
-                    <div class="glass-card">
-                        <div class="card-title">📡 Señal RSSI</div>
-                        <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
-                    </div>
-                    <!-- Tarjeta de Estado Red (se queda igual) -->
+            <!-- COLUMNA DERECHA (1.2fr) -->
+            <div class="right-column" style="display: flex; flex-direction: column; gap: 25px;">
+                <!-- Estado de Red y Señal RSSI (juntos en la misma fila) -->
+                <div class="double-card-row">
                     <div class="glass-card">
                         <div class="card-title">🌐 Estado Red</div>
                         <div id="net-status" style="color: var(--accent-cyan);">--</div>
                     </div>
-                    <!-- Barrido de Radar, Reconectar, Resetear -->
                     <div class="glass-card">
-                        <div class="card-title">🔄 Barrido de Radar</div>
-                        <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
-                    </div>
-                    <div class="glass-card" style="cursor: pointer;" id="reconnectBtn">
-                        <div class="btn-glass">🔄 Reconectar Sistema</div>
-                    </div>
-                    <div class="glass-card" style="cursor: pointer;" id="resetAlertBtnSquare">
-                        <div class="btn-glass">🔄 Resetear Alerta</div>
+                        <div class="card-title">📡 Señal RSSI</div>
+                        <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
                     </div>
                 </div>
 
-                <!-- Panel de Administración (híbrido) -->
+                <!-- Barrido de Radar -->
+                <div class="glass-card">
+                    <div class="card-title">🔄 Barrido de Radar</div>
+                    <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
+                </div>
+
+                <!-- Reconectar Sistema -->
+                <div class="glass-card" style="cursor: pointer;" id="reconnectBtn">
+                    <div class="btn-glass">🔄 Reconectar Sistema</div>
+                </div>
+
+                <!-- Resetear Alerta -->
+                <div class="glass-card" style="cursor: pointer;" id="resetAlertBtnSquare">
+                    <div class="btn-glass">🔄 Resetear Alerta</div>
+                </div>
+
+                <!-- Panel de Administración -->
                 <div class="glass-card admin-card" id="adminCard">
                     <div class="admin-reduced">
                         <span>🔐</span>
@@ -723,7 +728,7 @@
     <div id="toast" class="toast">Mensaje</div>
 
     <script>
-        // ========== TOAST Y MODAL ==========
+        // ========== TOAST Y MODAL (sin cambios) ==========
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
@@ -790,7 +795,6 @@
         };
         const mqttBroker = 'wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt';
 
-        // Modo de operación: 'mqtt' o 'http'
         let currentMode = 'mqtt';
         let forcedMode = null;
 
@@ -892,7 +896,7 @@
                 const timeout = setTimeout(() => {
                     pendingRequests.delete(id);
                     reject(new Error(`Timeout para comando ${action} (id=${id})`));
-                }, 10000);  // timeout aumentado a 10 segundos
+                }, 10000);
                 pendingRequests.set(id, { resolve, reject, timeout });
                 mqttClient.publish('fxi/admin/cmd', message);
             });
@@ -1054,7 +1058,6 @@
             else el.style.color = '#F06292';
         }
 
-        // Nueva función para actualizar el valor de Gas
         function actualizarGas(gas) {
             const gasVal = parseInt(gas);
             document.getElementById('gas-val').innerHTML = `${isNaN(gasVal) ? '--' : gasVal}<span class="unit">ppm</span>`;
@@ -1239,7 +1242,7 @@
             ctx.stroke();
         }
 
-        // ========== CONTROL DEL SERVO (fallback) ==========
+        // ========== CONTROL DEL SERVO ==========
         async function toggleServo() {
             const btn = document.getElementById('btn-servo');
             btn.innerText = "ENVIANDO...";
@@ -1259,7 +1262,6 @@
                     }
                 }, 300);
             } else {
-                // Fallback HTTP
                 try {
                     const res = await fetch('/toggleServo');
                     const state = await res.text();
@@ -1297,7 +1299,6 @@
                 document.getElementById('esp-status').classList.add('status-badge');
                 document.getElementById('net-status').innerHTML = 'MQTT: Conectado';
                 document.getElementById('net-status').style.color = 'var(--text-sec)';
-                // Suscripciones
                 mqttClient.subscribe('fxi/datos');
                 mqttClient.subscribe('fxi/rssi');
                 mqttClient.subscribe('fxi/emergencia');
@@ -1305,12 +1306,8 @@
                 mqttClient.subscribe('fxi/admin/resp');
                 mqttClient.subscribe('fxi/logs');
                 addSystemLog("✅ MQTT conectado a HiveMQ Cloud", 'info');
-                if (forcedMode !== 'http') {
-                    setMode('mqtt');
-                }
-                if (currentMode === 'http') {
-                    setMode('mqtt');
-                }
+                if (forcedMode !== 'http') setMode('mqtt');
+                if (currentMode === 'http') setMode('mqtt');
             });
 
             mqttClient.on('message', (topic, payload) => {
@@ -1328,9 +1325,7 @@
                             actualizarHumedad(data.hum);
                             addDataPoint(data.temp, data.hum);
                         }
-                        if (data.gas !== undefined) {
-                            actualizarGas(data.gas);
-                        }
+                        if (data.gas !== undefined) actualizarGas(data.gas);
                     } else if (topicStr === 'fxi/rssi') {
                         const data = JSON.parse(msg);
                         if (data.rssi !== undefined) actualizarRSSI(data.rssi);
@@ -1371,9 +1366,7 @@
                 document.getElementById('net-status').innerHTML = 'MQTT: Desconectado';
                 document.getElementById('net-status').style.color = '#F06292';
                 addSystemLog("⚠️ MQTT desconectado, cambiando a modo HTTP si está disponible", 'warn');
-                if (forcedMode !== 'mqtt') {
-                    setMode('http');
-                }
+                if (forcedMode !== 'mqtt') setMode('http');
             });
         }
 
@@ -1384,7 +1377,6 @@
             document.getElementById('admin-mode-badge').innerText = mode.toUpperCase();
             document.getElementById('modo-indicador').innerHTML = `Modo: ${mode.toUpperCase()}`;
             addSystemLog(`Cambiando a modo ${mode.toUpperCase()}`, 'info');
-            // Reiniciar intervalos de admin si estaban activos
             if (adminAuthenticated) {
                 if (statsInterval) clearInterval(statsInterval);
                 if (logsInterval) clearInterval(logsInterval);
@@ -1393,7 +1385,6 @@
                 updateStatsUI();
                 updateLogsUI();
             }
-            // Para datos en tiempo real: si modo HTTP, iniciar polling; si MQTT, los datos llegan solos
             if (mode === 'http') {
                 if (window.httpInterval) clearInterval(window.httpInterval);
                 window.httpInterval = setInterval(() => {
@@ -1478,7 +1469,6 @@
         document.getElementById('forceHttpBtn').addEventListener('click', () => { forcedMode = 'http'; if (mqttConnected) mqttClient.end(); setMode('http'); });
         document.getElementById('forceMqttBtn').addEventListener('click', () => { forcedMode = null; if (mqttConnected) setMode('mqtt'); else showToast("MQTT no conectado, no se puede cambiar", true); });
 
-        // Acciones rápidas
         const actions = [
             { icon: "🔄", label: "Reiniciar ESP32", cmd: "restart" },
             { icon: "🔍", label: "Comprobar OTA", cmd: "check_ota" },
@@ -1559,13 +1549,10 @@
         initParticles(); animateBg();
 
         if (Notification.permission === "default") Notification.requestPermission();
-
         conectarMQTT();
-        addSystemLog("🚀 Panel HÍBRIDO (MQTT+HTTP) cargado. Timeout de comandos = 10s. Suscripción a logs en tiempo real.", 'info');
+        addSystemLog("🚀 Panel reordenado según jerarquía solicitada.", 'info');
         setTimeout(() => {
-            if (!mqttConnected && currentMode === 'mqtt' && forcedMode !== 'mqtt') {
-                setMode('http');
-            }
+            if (!mqttConnected && currentMode === 'mqtt' && forcedMode !== 'mqtt') setMode('http');
         }, 5000);
     </script>
 </body>
