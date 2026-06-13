@@ -15,7 +15,7 @@
 #include <ArduinoJson.h>
 
 // ==================== BUFFER DE LOGS ====================
-#define MAX_LOGS 20   // <--- Reducido a 20
+#define MAX_LOGS 20   // Capacidad interna del buffer
 struct LogEntry {
   unsigned long timestamp;
   String level;
@@ -31,7 +31,7 @@ const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashb
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/firmware.bin";
 const char* urlHTML = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/index.html";
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 60001;
+const unsigned long INTERVALO_OTA = 60001;   // 1 minuto (pruebas), cambiar a 3600000 en producción
 
 // ==================== PINES ====================
 #define DHTPIN 27
@@ -55,17 +55,19 @@ PubSubClient client(espClient);
 WebServer server(80);
 DNSServer dnsServer;
 
-// ==================== FUNCIÓN addLog (corregida) ====================
+// ==================== FUNCIÓN addLog ====================
 void addLog(String level, String message) {
-  // Truncar a 80 caracteres
-  if (message.length() > 80) message = message.substring(0, 77) + "...";
+  // Truncar mensajes muy largos
+  if (message.length() > 100) message = message.substring(0, 97) + "...";
   logBuffer[logIndex].timestamp = millis();
   logBuffer[logIndex].level = level;
   logBuffer[logIndex].message = message;
   logIndex = (logIndex + 1) % MAX_LOGS;
   if (logCount < MAX_LOGS) logCount++;
+  // Mostrar en monitor serie (excepto los comandos admin repetitivos, que ya filtramos antes)
   Serial.printf("[%s] %s\n", level.c_str(), message.c_str());
-
+  
+  // Publicar el log en MQTT si el cliente está conectado
   if (client.connected()) {
     String logPayload = "{\"timestamp\":" + String(millis()) + ",\"level\":\"" + level + "\",\"message\":\"" + message + "\"}";
     client.publish("fxi/logs", logPayload.c_str());
@@ -75,13 +77,13 @@ void addLog(String level, String message) {
 // ==================== ESTADOS Y TIEMPOS ====================
 enum EstadoSistema { REPOSO, ESPERANDO_AGUA, APUNTANDO };
 EstadoSistema estadoActual = REPOSO;
-const int SERVO_IZQ = 0;
-const int SERVO_DER = 180;
-const int SERVO_CENTRO = 90;
+const int SERVO_IZQ = 0;        // Giro continuo izquierda
+const int SERVO_DER = 180;      // Giro continuo derecha
+const int SERVO_CENTRO = 90;    // Parado
 unsigned long TIEMPO_APUNTAR = 2000;
 unsigned long cronometroRutina = 0;
 const unsigned long WATER_DELAY_MS = 1000;
-int ladoEmergencia = 0;
+int ladoEmergencia = 0; // 0=centro, 1=izquierda, 2=derecha, 3=ambos
 bool emergenciaActiva = false;
 
 // ==================== VARIABLES ====================
@@ -296,8 +298,13 @@ void respondAdminCommand(int id, bool success, JsonDocument &data, const String 
   client.publish("fxi/admin/resp", out.c_str());
 }
 
+// ==================== PROCESADOR DE COMANDOS ADMIN (sin logs repetitivos) ====================
 void processAdminCommand(int id, const String &action) {
-  addLog("info", "Comando MQTT admin: " + action + " (id=" + String(id) + ")");
+  // Los comandos repetitivos (get_stats, get_logs, ping) NO se registran en el monitor serie
+  if (action != "get_stats" && action != "get_logs" && action != "ping") {
+    addLog("info", "Comando MQTT admin: " + action + " (id=" + String(id) + ")");
+  }
+
   if (action == "get_stats") {
     DynamicJsonDocument data(512);
     data["firmware"] = FIRMWARE_VERSION;
@@ -316,10 +323,12 @@ void processAdminCommand(int id, const String &action) {
     respondAdminCommand(id, true, data);
   }
   else if (action == "get_logs") {
-    DynamicJsonDocument data(8192);   // Buffer aumentado a 8192
+    // Enviar solo los últimos 10 logs para reducir tamaño
+    int logsToSend = (logCount < 10) ? logCount : 10;
+    DynamicJsonDocument data(4096);
     JsonArray logs = data.createNestedArray("logs");
-    int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
-    for (int i = 0; i < logCount; i++) {
+    int start = (logIndex - logsToSend + MAX_LOGS) % MAX_LOGS;
+    for (int i = 0; i < logsToSend; i++) {
       int idx = (start + i) % MAX_LOGS;
       JsonObject entry = logs.createNestedObject();
       entry["timestamp"] = logBuffer[idx].timestamp;
@@ -449,7 +458,7 @@ void handleInfo() {
 }
 
 void handleLogs() {
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(4096);
   JsonArray logs = doc.createNestedArray("logs");
   int start = (logIndex - logCount + MAX_LOGS) % MAX_LOGS;
   for (int i = 0; i < logCount; i++) {
