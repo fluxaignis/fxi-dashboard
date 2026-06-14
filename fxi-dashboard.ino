@@ -88,7 +88,7 @@ bool emergenciaActiva = false;
 
 // ==================== VARIABLES ====================
 const int UMBRAL_FUEGO = 500;
-const int UMBRAL_GAS = 400;
+const int UMBRAL_GAS = 250;
 const float TEMP_CRITICA = 40.0;
 bool emergenciaEnviada = false;
 float tempGuardada = NAN;
