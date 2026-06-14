@@ -8,7 +8,7 @@
     <link rel="apple-touch-icon" href="favicon-192x192.png">
     <link rel="manifest" href="manifest.json">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js" defer></script>
     <style>
         /* ==================== BASE OPTIMIZADA ==================== */
         :root {
@@ -54,12 +54,35 @@
             box-shadow: 0 0 15px var(--danger-glow), 0 0 30px rgba(255, 61, 0, 0.3);
             border-color: var(--flame-danger);
         }
+        /* ===== MODO PAPA (optimización extrema) ===== */
+        body.potato-mode * {
+            transition-duration: 0s !important;
+            animation-duration: 0s !important;
+            animation: none !important;
+        }
+        body.potato-mode .glass-card {
+            backdrop-filter: none !important;
+        }
+        body.potato-mode #weather-canvas {
+            display: none !important;
+        }
+        body.potato-mode #trendCard {
+            display: none !important;
+        }
+        body.potato-mode #adminCard {
+            display: none !important;
+        }
+        body.potato-mode .flame-icon.danger {
+            animation: none !important;
+        }
+
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
         ::-webkit-scrollbar-thumb { background: var(--accent-cyan); border-radius: 10px; }
         #weather-canvas {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 0; pointer-events: none;
+            image-rendering: auto;
         }
         .main-content {
             position: relative; z-index: 2;
@@ -77,11 +100,13 @@
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             margin-right: auto;
         }
-        #theme-toggle {
+        #theme-toggle, #bg-toggle, #potato-toggle {
             cursor: pointer; font-size: 26px;
             transition: transform 0.2s;
+            user-select: none;
+            margin-left: 10px;
         }
-        #theme-toggle:hover { transform: scale(1.2); }
+        #theme-toggle:hover, #bg-toggle:hover, #potato-toggle:hover { transform: scale(1.2); }
         .dashboard-grid {
             display: grid;
             grid-template-columns: 1.8fr 1.2fr;
@@ -101,7 +126,6 @@
             transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
         }
         .glass-card:hover { transform: translateY(-5px); }
-        /* En móvil quitamos el blur costoso */
         @media (max-width: 768px) {
             .glass-card { backdrop-filter: none; }
         }
@@ -166,6 +190,7 @@
             width: 100%;
             transition: all 0.3s;
             font-weight: 800;
+            user-select: none;
         }
         .btn-servo.active {
             background: var(--accent-cyan);
@@ -229,6 +254,7 @@
             border-radius: 20px;
             cursor: pointer;
             font-size: 11px;
+            transition: background 0.2s, color 0.2s;
         }
         .range-btn.active {
             background: var(--accent-cyan);
@@ -478,6 +504,18 @@
             #theme-toggle { margin-left: 0; }
             .double-card-row { gap: 15px; }
         }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important;
+                transition-duration: 0.001ms !important;
+            }
+        }
+        .header-buttons {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-left: auto;
+        }
     </style>
 </head>
 <body>
@@ -492,13 +530,16 @@
                 </div>
                 <div style="font-size: 11px; color: var(--text-sec);" id="modo-indicador">Modo: --</div>
             </div>
-            <div id="theme-toggle">✳</div>
+            <div class="header-buttons">
+                <div id="potato-toggle" title="Modo Papa (extrema optimización)">🥔</div>
+                <div id="bg-toggle" title="Desactivar fondo animado">✨</div>
+                <div id="theme-toggle" title="Cambiar tema">✳</div>
+            </div>
         </div>
 
         <div class="dashboard-grid">
             <!-- COLUMNA IZQUIERDA -->
             <div class="left-column">
-                <!-- Temperatura -->
                 <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <div class="card-title">Temperatura</div>
@@ -508,7 +549,6 @@
                     <div style="font-size: 55px;">🌡️</div>
                 </div>
 
-                <!-- Humedad y Gas (juntos) -->
                 <div class="double-card-row">
                     <div class="glass-card">
                         <div class="card-title">💧 Humedad</div>
@@ -520,34 +560,23 @@
                     </div>
                 </div>
 
-                <!-- Estado de incendio -->
                 <div class="glass-card flame-card">
                     <div class="flame-icon normal" id="flameIcon">🔥</div>
                     <div class="flame-status" id="flameStatus">Estado: Normal</div>
                     <div style="font-size: 11px; opacity: 0.7;">Detección óptica de incendios</div>
                 </div>
 
-                <!-- Niveles Actuales (barras: Temp, Hum, Gas) -->
-                <div class="glass-card">
+                <div class="glass-card" id="levelsCard">
                     <div class="card-title">Niveles Actuales</div>
                     <div class="chart-container">
-                        <div class="bar-group">
-                            <div class="bar-bg"><div id="bar-temp" class="bar-fill" style="background: var(--chart-pink);"></div></div>
-                            <div>T</div>
-                        </div>
-                        <div class="bar-group">
-                            <div class="bar-bg"><div id="bar-hum" class="bar-fill" style="background: var(--chart-blue);"></div></div>
-                            <div>H</div>
-                        </div>
-                        <div class="bar-group">
-                            <div class="bar-bg"><div id="bar-gas" class="bar-fill" style="background: var(--chart-orange);"></div></div>
-                            <div>G</div>
-                        </div>
+                        <div class="bar-group"><div class="bar-bg"><div id="bar-temp" class="bar-fill" style="background: var(--chart-pink);"></div></div><div>T</div></div>
+                        <div class="bar-group"><div class="bar-bg"><div id="bar-hum" class="bar-fill" style="background: var(--chart-blue);"></div></div><div>H</div></div>
+                        <div class="bar-group"><div class="bar-bg"><div id="bar-gas" class="bar-fill" style="background: var(--chart-orange);"></div></div><div>G</div></div>
                     </div>
                 </div>
 
-                <!-- Tendencias (con 3 líneas) -->
-                <div class="glass-card">
+                <!-- Tarjeta de tendencias (se oculta en modo papa) -->
+                <div class="glass-card" id="trendCard">
                     <div class="card-title">Tendencias (Temp / Hum / Gas)</div>
                     <div class="legend">
                         <span class="legend-temp">● Temperatura (°C)</span>
@@ -567,7 +596,7 @@
                             <text x="570" y="20" fill="white" font-size="7" opacity="0.5">100%</text>
                         </svg>
                     </div>
-                    <div class="range-buttons">
+                    <div class="range-buttons" id="rangeButtons">
                         <button class="range-btn" data-points="10">10</button>
                         <button class="range-btn" data-points="20">20</button>
                         <button class="range-btn" data-points="30">30</button>
@@ -579,7 +608,6 @@
 
             <!-- COLUMNA DERECHA -->
             <div class="right-column">
-                <!-- Estado de Red y Señal RSSI -->
                 <div class="double-card-row">
                     <div class="glass-card">
                         <div class="card-title">🌐 Estado Red</div>
@@ -591,28 +619,23 @@
                     </div>
                 </div>
 
-                <!-- Barrido de Radar -->
                 <div class="glass-card">
                     <div class="card-title">🔄 Barrido de Radar</div>
                     <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
                 </div>
 
-                <!-- Reconectar Sistema -->
                 <div class="glass-card" style="cursor: pointer;" id="reconnectBtn">
                     <div class="btn-glass">🔄 Reconectar Sistema</div>
                 </div>
 
-                <!-- Resetear Alerta -->
                 <div class="glass-card" style="cursor: pointer;" id="resetAlertBtnSquare">
                     <div class="btn-glass">🔄 Resetear Alerta</div>
                 </div>
 
-                <!-- Panel de Administración -->
+                <!-- Panel de administración (se oculta en modo papa) -->
                 <div class="glass-card admin-card" id="adminCard">
                     <div class="admin-reduced">
-                        <span>🔐</span>
-                        <span class="admin-title">Panel de Administración</span>
-                        <span>🔒</span>
+                        <span>🔐</span><span class="admin-title">Panel de Administración</span><span>🔒</span>
                     </div>
                     <div class="admin-expanded">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -623,57 +646,27 @@
                             <button id="forceHttpBtn" class="range-btn" style="background: var(--chart-pink); color:white;">Forzar HTTP</button>
                             <button id="forceMqttBtn" class="range-btn" style="background: var(--accent-cyan);">Volver a MQTT</button>
                         </div>
-                        <!-- Estadísticas -->
-                        <div class="admin-section open" id="secStats">
-                            <div class="admin-section-header">
-                                <span class="admin-section-title">📊 Estadísticas del Sistema</span>
-                                <span class="admin-section-icon">▶</span>
-                            </div>
+                        <div class="admin-section open" data-section="stats">
+                            <div class="admin-section-header"><span class="admin-section-title">📊 Estadísticas del Sistema</span><span class="admin-section-icon">▶</span></div>
+                            <div class="admin-section-content"><div class="stats-grid" id="statsGrid">Cargando...</div></div>
+                        </div>
+                        <div class="admin-section open" data-section="actions">
+                            <div class="admin-section-header"><span class="admin-section-title">⚡ Acciones Rápidas</span><span class="admin-section-icon">▶</span></div>
+                            <div class="admin-section-content"><div class="action-blocks" id="actionBlocks"></div></div>
+                        </div>
+                        <div class="admin-section open" data-section="perf">
+                            <div class="admin-section-header"><span class="admin-section-title">📈 Rendimiento</span><span class="admin-section-icon">▶</span></div>
                             <div class="admin-section-content">
-                                <div class="stats-grid" id="statsGrid">Cargando...</div>
+                                <div class="ping-graph"><canvas id="pingCanvas" width="400" height="70"></canvas></div>
+                                <div style="text-align: center; margin-top: 6px; font-size: 10px;">Promedio: <span id="avgPing">--</span> ms</div>
                             </div>
                         </div>
-                        <!-- Acciones Rápidas -->
-                        <div class="admin-section open" id="secActions">
-                            <div class="admin-section-header">
-                                <span class="admin-section-title">⚡ Acciones Rápidas</span>
-                                <span class="admin-section-icon">▶</span>
-                            </div>
-                            <div class="admin-section-content">
-                                <div class="action-blocks" id="actionBlocks"></div>
-                            </div>
+                        <div class="admin-section open" data-section="update">
+                            <div class="admin-section-header"><span class="admin-section-title">🔄 Actualización OTA</span><span class="admin-section-icon">▶</span></div>
+                            <div class="admin-section-content"><div class="action-blocks" id="updateBlocks"></div></div>
                         </div>
-                        <!-- Rendimiento -->
-                        <div class="admin-section open" id="secPerf">
-                            <div class="admin-section-header">
-                                <span class="admin-section-title">📈 Rendimiento</span>
-                                <span class="admin-section-icon">▶</span>
-                            </div>
-                            <div class="admin-section-content">
-                                <div class="ping-graph">
-                                    <canvas id="pingCanvas" width="400" height="70"></canvas>
-                                </div>
-                                <div style="text-align: center; margin-top: 6px; font-size: 10px;">
-                                    Promedio: <span id="avgPing">--</span> ms
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Actualización OTA -->
-                        <div class="admin-section open" id="secUpdate">
-                            <div class="admin-section-header">
-                                <span class="admin-section-title">🔄 Actualización OTA</span>
-                                <span class="admin-section-icon">▶</span>
-                            </div>
-                            <div class="admin-section-content">
-                                <div class="action-blocks" id="updateBlocks"></div>
-                            </div>
-                        </div>
-                        <!-- Logs del sistema -->
-                        <div class="admin-section open" id="secLogs">
-                            <div class="admin-section-header">
-                                <span class="admin-section-title">📋 Logs del Sistema</span>
-                                <span class="admin-section-icon">▶</span>
-                            </div>
+                        <div class="admin-section open" data-section="logs">
+                            <div class="admin-section-header"><span class="admin-section-title">📋 Logs del Sistema</span><span class="admin-section-icon">▶</span></div>
                             <div class="admin-section-content">
                                 <button id="toggleTimestampBtn" class="toggle-timestamp">Mostrar timestamps</button>
                                 <div class="log-container" id="liveLogs">
@@ -701,327 +694,321 @@
     <div id="toast" class="toast">Mensaje</div>
 
     <script>
-        // ========== TOAST Y MODAL ==========
-        function showToast(msg, isError = false) {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg;
-            toast.style.color = isError ? '#F06292' : 'var(--accent-cyan)';
-            toast.style.borderColor = isError ? '#F06292' : 'var(--accent-cyan)';
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
-        }
+        (function() {
+            /* ===================== CACHÉ DE DOM ===================== */
+            const dom = {
+                toast: document.getElementById('toast'),
+                modal: document.getElementById('modal'),
+                modalTitle: document.getElementById('modalTitle'),
+                modalBody: document.getElementById('modalBody'),
+                modalInput: document.getElementById('modalInput'),
+                modalConfirm: document.getElementById('modalConfirm'),
+                modalCancel: document.getElementById('modalCancel'),
+                espStatus: document.getElementById('esp-status'),
+                modoIndicador: document.getElementById('modo-indicador'),
+                netStatus: document.getElementById('net-status'),
+                tempVal: document.getElementById('temp-val'),
+                descVal: document.getElementById('desc-val'),
+                humVal: document.getElementById('hum-val'),
+                gasVal: document.getElementById('gas-val'),
+                rssiVal: document.getElementById('rssi-val'),
+                barTemp: document.getElementById('bar-temp'),
+                barHum: document.getElementById('bar-hum'),
+                barGas: document.getElementById('bar-gas'),
+                flameIcon: document.getElementById('flameIcon'),
+                flameStatus: document.getElementById('flameStatus'),
+                trendChart: document.getElementById('trendChart'),
+                tempLine: document.getElementById('tempLine'),
+                humLine: document.getElementById('humLine'),
+                gasLine: document.getElementById('gasLine'),
+                avgText: document.getElementById('avgText'),
+                btnServo: document.getElementById('btn-servo'),
+                adminCard: document.getElementById('adminCard'),
+                closeAdmin: document.getElementById('closeAdmin'),
+                adminModeBadge: document.getElementById('admin-mode-badge'),
+                statsGrid: document.getElementById('statsGrid'),
+                actionBlocks: document.getElementById('actionBlocks'),
+                updateBlocks: document.getElementById('updateBlocks'),
+                pingCanvas: document.getElementById('pingCanvas'),
+                avgPing: document.getElementById('avgPing'),
+                liveLogs: document.getElementById('liveLogs'),
+                toggleTimestampBtn: document.getElementById('toggleTimestampBtn'),
+                forceHttpBtn: document.getElementById('forceHttpBtn'),
+                forceMqttBtn: document.getElementById('forceMqttBtn'),
+                reconnectBtn: document.getElementById('reconnectBtn'),
+                resetAlertBtnSquare: document.getElementById('resetAlertBtnSquare'),
+                themeToggle: document.getElementById('theme-toggle'),
+                bgToggle: document.getElementById('bg-toggle'),
+                potatoToggle: document.getElementById('potato-toggle'),
+                canvasBg: document.getElementById('weather-canvas'),
+                rangeButtons: document.getElementById('rangeButtons')
+            };
+            const ctxBg = dom.canvasBg.getContext('2d');
 
-        let modalResolve = null;
-        const modal = document.getElementById('modal');
-        const modalInput = document.getElementById('modalInput');
-        const modalConfirm = document.getElementById('modalConfirm');
-        const modalCancel = document.getElementById('modalCancel');
-        function showPasswordModal(title, message, placeholder = 'Contraseña') {
-            document.getElementById('modalTitle').textContent = title;
-            document.getElementById('modalBody').textContent = message;
-            modalInput.placeholder = placeholder;
-            modalInput.value = '';
-            modal.style.display = 'flex';
-            modalInput.focus();
-            return new Promise((resolve) => { modalResolve = resolve; });
-        }
-        function closeModal(result) {
-            modal.style.display = 'none';
-            if (modalResolve) { modalResolve(result); modalResolve = null; }
-        }
-        modalConfirm.onclick = () => closeModal(modalInput.value);
-        modalCancel.onclick = () => closeModal(null);
-        modalInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') closeModal(modalInput.value); });
+            /* ========== CONSTANTES ========== */
+            const adminPassword = "asdlkj24092009";
+            const UMBRAL_DESACTIVACION_CRITICA = 38.0;
+            const UMBRAL_DESACTIVACION_FUEGO = 35.0;
 
-        // ========== VARIABLES GLOBALES ==========
-        let isDarkMode = true;
-        let dangerMode = false;
-        let emergenciaActivaMQTT = false;
-        let simulationActive = false;
-        let tempHistory = [], humHistory = [], gasHistory = [];
-        let currentPoints = 20;
-        let adminAuthenticated = false;
-        const adminPassword = "asdlkj24092009";
-        let statsInterval = null, logsInterval = null;
-        let pingHistory = [];
-        let showTimestamps = false;
-        const UMBRAL_DESACTIVACION_CRITICA = 38.0;
-        const UMBRAL_DESACTIVACION_FUEGO = 35.0;
+            /* ========== ESTADO GLOBAL ========== */
+            let isDarkMode = true;
+            let dangerMode = false;
+            let emergenciaActivaMQTT = false;
+            let simulationActive = false;
+            let tempHistory = [], humHistory = [], gasHistory = [];
+            let currentPoints = 20;
+            let adminAuthenticated = false;
+            let pingHistory = [];
+            let showTimestamps = false;
+            let mqttClient = null, mqttConnected = false;
+            let nextCommandId = 1;
+            const pendingRequests = new Map();
+            let currentMode = 'mqtt';
+            let forcedMode = null;
+            let modalResolve = null;
+            let statsInterval = null, logsInterval = null, pingInterval = null;
+            let httpPollInterval = null;
+            let particles = [];
+            let animationId = null;
+            let bgEnabled = true;
+            let potatoMode = false;
+            let previousBgEnabled = true;
+            let lastSvgDrawTime = 0;
+            const SVG_THROTTLE = 500;
+            let lastPotatoDataUpdate = 0;
 
-        let mqttClient = null, mqttConnected = false;
-        let nextCommandId = 1;
-        const pendingRequests = new Map();
-        const mqttOptions = {
-            connectTimeout: 4000,
-            clientId: 'web_' + Math.random().toString(16).substr(2, 8),
-            username: 'Admin',
-            password: 'FluxaIgnis2026',
-        };
-        const mqttBroker = 'wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt';
-        let currentMode = 'mqtt';
-        let forcedMode = null;
+            /* ========== TOAST / MODAL ========== */
+            function showToast(msg, isError = false) {
+                if (potatoMode && !isError) return; // en modo papa solo errores
+                dom.toast.textContent = msg;
+                dom.toast.style.color = isError ? '#F06292' : 'var(--accent-cyan)';
+                dom.toast.style.borderColor = isError ? '#F06292' : 'var(--accent-cyan)';
+                dom.toast.classList.add('show');
+                clearTimeout(dom.toast._timeout);
+                dom.toast._timeout = setTimeout(() => dom.toast.classList.remove('show'), potatoMode ? 1500 : 3000);
+            }
+            function showPasswordModal(title, message, placeholder = 'Contraseña') {
+                dom.modalTitle.textContent = title;
+                dom.modalBody.textContent = message;
+                dom.modalInput.placeholder = placeholder;
+                dom.modalInput.value = '';
+                dom.modal.style.display = 'flex';
+                dom.modalInput.focus();
+                return new Promise((resolve) => { modalResolve = resolve; });
+            }
+            function closeModal(result) {
+                dom.modal.style.display = 'none';
+                if (modalResolve) { modalResolve(result); modalResolve = null; }
+            }
+            dom.modalConfirm.onclick = () => closeModal(dom.modalInput.value);
+            dom.modalCancel.onclick = () => closeModal(null);
+            dom.modalInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') closeModal(dom.modalInput.value); });
 
-        // ========== FUNCIONES HTTP (fallback) ==========
-        async function httpGetJson(url) {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
-        }
-        async function httpSendCommand(cmd) {
-            const res = await fetch(`/cmd?action=${cmd}`);
-            return await res.text();
-        }
-        async function httpGetEstado() {
-            const data = await httpGetJson('/estado');
-            actualizarTemperatura(data.temp);
-            actualizarHumedad(data.hum);
-            actualizarRSSI(data.rssi);
-            actualizarGas(data.gas);
-            addDataPoint(data.temp, data.hum, data.gas);
-        }
-        async function httpUpdateStatsUI() {
-            if (!adminAuthenticated) return;
-            try {
-                const info = await httpGetJson('/info');
-                const sketchPercent = info.sketch_percent || 45;
-                const littlefsPercent = info.littlefs_percent || 23;
-                const freePercent = 100 - (sketchPercent + littlefsPercent);
-                const heapPercent = info.heap_percent || 0;
-                const uptime = info.uptime || 0;
-                const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
-                const totalKB = 1992 + 128;
-                const mdnsHost = info.mdns || 'fluxaignis_ota.local';
-                document.getElementById('statsGrid').innerHTML = `
-                    <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${info.firmware || '--'}</div></div>
-                    <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
-                    <div class="stat-card"><div class="stat-label">RAM (Heap)</div><div class="stat-value">${heapPercent}%</div><div class="progress-bar"><div class="progress-fill" style="width: ${heapPercent}%"></div></div></div>
-                    <div class="stat-card"><div class="stat-label">Flash usado</div><div class="stat-value">${Math.round(usedKB)} KB / ${totalKB} KB (${Math.round(sketchPercent+littlefsPercent)}%)</div><div class="stacked-bar"><div class="segment-firmware" style="width: ${sketchPercent}%;"></div><div class="segment-littlefs" style="width: ${littlefsPercent}%;"></div><div class="segment-free" style="width: ${freePercent}%;"></div></div></div>
-                    <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${info.ip_ap || '--'}</div></div>
-                    <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${info.ip_sta || '--'}</div></div>
-                    <div class="stat-card"><div class="stat-label">MQTT broker</div><div class="stat-value">${info.mqtt_status || '--'}</div></div>
-                    <div class="stat-card"><div class="stat-label">mDNS</div><div class="stat-value">${mdnsHost}</div></div>
-                `;
-            } catch(e) { document.getElementById('statsGrid').innerHTML = `<div class="stat-card">Error HTTP</div>`; }
-        }
-        async function httpUpdateLogsUI() {
-            if (!adminAuthenticated) return;
-            try {
-                const data = await httpGetJson('/logs');
-                const logs = data.logs || [];
-                const logDiv = document.getElementById('liveLogs');
-                if (!logDiv) return;
-                if (logs.length === 0) { logDiv.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>'; return; }
-                logDiv.innerHTML = '';
-                logs.slice().reverse().forEach(log => {
-                    const t = new Date(log.timestamp).toLocaleTimeString();
-                    const entry = document.createElement('div');
-                    entry.className = `log-entry log-${log.level}`;
-                    entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
-                    logDiv.appendChild(entry);
+            /* ========== FUNCIONES HTTP ========== */
+            async function httpGetJson(url) {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            }
+            async function httpSendCommand(cmd) {
+                const res = await fetch(`/cmd?action=${cmd}`);
+                return await res.text();
+            }
+            async function httpGetEstado() {
+                const data = await httpGetJson('/estado');
+                actualizarTemperatura(data.temp);
+                actualizarHumedad(data.hum);
+                actualizarRSSI(data.rssi);
+                actualizarGas(data.gas);
+                addDataPoint(data.temp, data.hum, data.gas);
+            }
+
+            /* ========== MQTT ADMIN ========== */
+            function sendAdminCommand(action, payload = {}) {
+                return new Promise((resolve, reject) => {
+                    if (!mqttClient || !mqttConnected) reject(new Error("MQTT no conectado"));
+                    const id = nextCommandId++;
+                    payload.id = id;
+                    payload.action = action;
+                    const message = JSON.stringify(payload);
+                    const timeout = setTimeout(() => {
+                        pendingRequests.delete(id);
+                        reject(new Error(`Timeout para comando ${action} (id=${id})`));
+                    }, 10000);
+                    pendingRequests.set(id, { resolve, reject, timeout });
+                    mqttClient.publish('fxi/admin/cmd', message);
                 });
-            } catch(e) {}
-        }
-        async function httpMeasurePing() {
-            if (!adminAuthenticated) return;
-            const start = performance.now();
-            try {
-                await fetch('/estado', { method: 'HEAD' });
-                const duration = performance.now() - start;
-                pingHistory.push(duration);
-                if (pingHistory.length > 20) pingHistory.shift();
-                drawPingGraph();
-                const avg = pingHistory.reduce((a,b)=>a+b,0)/pingHistory.length;
-                document.getElementById('avgPing').innerText = avg.toFixed(1);
-            } catch(e) {}
-        }
-
-        // ========== MQTT ADMIN ==========
-        function sendAdminCommand(action, payload = {}) {
-            return new Promise((resolve, reject) => {
-                if (!mqttClient || !mqttConnected) reject(new Error("MQTT no conectado"));
-                const id = nextCommandId++;
-                payload.id = id;
-                payload.action = action;
-                const message = JSON.stringify(payload);
-                const timeout = setTimeout(() => {
+            }
+            function handleAdminResponse(topic, payload) {
+                try {
+                    const msg = payload.toString();
+                    const data = JSON.parse(msg);
+                    const id = data.id;
+                    const entry = pendingRequests.get(id);
+                    if (!entry) return;
+                    clearTimeout(entry.timeout);
                     pendingRequests.delete(id);
-                    reject(new Error(`Timeout para comando ${action} (id=${id})`));
-                }, 10000);
-                pendingRequests.set(id, { resolve, reject, timeout });
-                mqttClient.publish('fxi/admin/cmd', message);
-            });
-        }
-        function handleAdminResponse(topic, payload) {
-            try {
-                const msg = payload.toString();
-                const data = JSON.parse(msg);
-                const id = data.id;
-                const entry = pendingRequests.get(id);
-                if (!entry) return;
-                clearTimeout(entry.timeout);
-                pendingRequests.delete(id);
-                if (data.success) entry.resolve(data.data || {});
-                else entry.reject(new Error(data.error || "Error desconocido"));
-            } catch(e) {}
-        }
-
-        // ========== UI COMUNES ==========
-        function setDangerMode(active, motivo = "") {
-            if (active === dangerMode) return;
-            dangerMode = active;
-            if (dangerMode) {
-                document.body.classList.add('danger-alert');
-                document.getElementById('flameIcon').classList.add('danger');
-                document.getElementById('flameIcon').classList.remove('normal');
-                document.getElementById('flameStatus').innerHTML = `⚠️ ¡PELIGRO! ${motivo || "Incendio detectado"}`;
-                document.getElementById('flameStatus').style.color = '#FF3D00';
-                addSystemLog(`🚨 ALERTA: ${motivo}`, 'alert');
-            } else {
-                document.body.classList.remove('danger-alert');
-                document.getElementById('flameIcon').classList.remove('danger');
-                document.getElementById('flameIcon').classList.add('normal');
-                document.getElementById('flameStatus').innerHTML = 'Estado: Normal';
-                document.getElementById('flameStatus').style.color = '';
-                addSystemLog(`✅ Alerta desactivada.`, 'info');
+                    if (data.success) entry.resolve(data.data || {});
+                    else entry.reject(new Error(data.error || "Error desconocido"));
+                } catch(e) {}
             }
-        }
-        function resetAlertaForzado() {
-            emergenciaActivaMQTT = false;
-            setDangerMode(false, "");
-            if (simulationActive && mqttClient && mqttConnected) {
-                mqttClient.publish('fxi/simular', 'FUEGO_OFF');
-                simulationActive = false;
-            }
-            const statusDiv = document.getElementById('net-status');
-            statusDiv.innerText = "Alerta reiniciada manualmente";
-            showToast("Alerta reseteada");
-            setTimeout(() => {
-                if (!dangerMode) {
-                    if (currentMode === 'mqtt') statusDiv.innerText = "MQTT: Conectado";
-                    else statusDiv.innerText = "HTTP: Conectado";
-                } else statusDiv.innerText = "Modo peligro activo";
-            }, 2000);
-        }
-        function addSystemLog(message, level = 'info') {
-            const logDiv = document.getElementById('liveLogs');
-            if (!logDiv) return;
-            const timestamp = new Date().toLocaleTimeString();
-            const entry = document.createElement('div');
-            entry.className = `log-entry log-${level}`;
-            entry.setAttribute('title', timestamp);
-            entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${timestamp}]</span> ${message}`;
-            logDiv.prepend(entry);
-            if (logDiv.children.length > 120) logDiv.removeChild(logDiv.lastChild);
-        }
 
-        // ========== GRÁFICO SVG (3 líneas) ==========
-        function drawSVG() {
-            const pointsCount = Math.min(tempHistory.length, currentPoints);
-            if (pointsCount < 2) return;
-            const temps = tempHistory.slice(-pointsCount);
-            const hums = humHistory.slice(-pointsCount);
-            const gases = gasHistory.slice(-pointsCount);
-            let maxTemp = Math.max(...temps, 35);
-            let minTemp = Math.min(...temps, 15);
-            let maxHum = Math.max(...hums, 80);
-            let minHum = Math.min(...hums, 20);
-            let maxGas = Math.max(...gases, 500);
-            let minGas = Math.min(...gases, 0);
-            maxTemp += (maxTemp - minTemp) * 0.1;
-            minTemp -= (maxTemp - minTemp) * 0.1;
-            maxHum += (maxHum - minHum) * 0.1;
-            minHum -= (maxHum - minHum) * 0.1;
-            maxGas += (maxGas - minGas) * 0.1;
-            minGas -= (maxGas - minGas) * 0.1;
-            if (minTemp < 0) minTemp = 0;
-            if (minHum < 0) minHum = 0;
-            if (minGas < 0) minGas = 0;
-            const graphLeft = 40, graphRight = 560, graphWidth = graphRight - graphLeft;
-            const graphTop = 15, graphBottom = 145, graphHeight = graphBottom - graphTop;
-            let tempPoints = '', humPoints = '', gasPoints = '';
-            const stepX = graphWidth / (pointsCount - 1);
-            for (let i = 0; i < pointsCount; i++) {
-                const x = graphLeft + i * stepX;
-                const yTemp = graphBottom - ((temps[i] - minTemp) / (maxTemp - minTemp)) * graphHeight;
-                const yHum = graphBottom - ((hums[i] - minHum) / (maxHum - minHum)) * graphHeight;
-                const yGas = graphBottom - ((gases[i] - minGas) / (maxGas - minGas)) * graphHeight;
-                tempPoints += `${x},${yTemp} `;
-                humPoints += `${x},${yHum} `;
-                gasPoints += `${x},${yGas} `;
-            }
-            document.getElementById('tempLine').setAttribute('points', tempPoints);
-            document.getElementById('humLine').setAttribute('points', humPoints);
-            document.getElementById('gasLine').setAttribute('points', gasPoints);
-            const avgTemp = (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1);
-            const avgHum = (hums.reduce((a,b)=>a+b,0)/hums.length).toFixed(0);
-            const avgGas = Math.round(gases.reduce((a,b)=>a+b,0)/gases.length);
-            document.getElementById('avgText').innerHTML = `📊 Promedio (últimos ${currentPoints}): Temp ${avgTemp}°C / Hum ${avgHum}% / Gas ${avgGas}ppm`;
-        }
-        function addDataPoint(temp, hum, gas) {
-            if (!isNaN(temp) && temp !== null) tempHistory.push(temp);
-            if (!isNaN(hum) && hum !== null) humHistory.push(hum);
-            if (!isNaN(gas) && gas !== null) gasHistory.push(gas);
-            if (tempHistory.length > 200) { tempHistory.shift(); humHistory.shift(); gasHistory.shift(); }
-            drawSVG();
-        }
-
-        // ========== ACTUALIZACIÓN UI ==========
-        function actualizarTemperatura(temp) {
-            const tempVal = parseFloat(temp);
-            if (isNaN(tempVal)) return;
-            document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
-            let altura = Math.min(100, tempVal * 2);
-            document.getElementById('bar-temp').style.height = altura + '%';
-            let desc = '';
-            if (tempVal < 20) desc = 'Ambiente fresco';
-            else if (tempVal < 30) desc = 'Temperatura normal';
-            else if (tempVal < 40) desc = 'Calor elevado';
-            else desc = '¡PELIGRO! Calor extremo';
-            document.getElementById('desc-val').innerText = desc;
-            if (dangerMode) {
-                if (emergenciaActivaMQTT) {
-                    if (tempVal < UMBRAL_DESACTIVACION_FUEGO) {
-                        setDangerMode(false, "");
-                        emergenciaActivaMQTT = false;
-                        addSystemLog(`Alerta MQTT desactivada: temp < ${UMBRAL_DESACTIVACION_FUEGO}°C`);
-                    }
+            /* ========== UI COMUNES ========== */
+            function setDangerMode(active, motivo = "") {
+                if (active === dangerMode) return;
+                dangerMode = active;
+                if (dangerMode) {
+                    document.body.classList.add('danger-alert');
+                    dom.flameIcon.classList.add('danger');
+                    dom.flameIcon.classList.remove('normal');
+                    dom.flameStatus.innerHTML = `⚠️ ¡PELIGRO! ${motivo || "Incendio detectado"}`;
+                    dom.flameStatus.style.color = '#FF3D00';
+                    addSystemLog(`🚨 ALERTA: ${motivo}`, 'alert');
                 } else {
-                    if (tempVal < UMBRAL_DESACTIVACION_CRITICA) {
-                        setDangerMode(false, "");
-                        addSystemLog(`Alerta por calor desactivada: temp < ${UMBRAL_DESACTIVACION_CRITICA}°C`);
-                    }
+                    document.body.classList.remove('danger-alert');
+                    dom.flameIcon.classList.remove('danger');
+                    dom.flameIcon.classList.add('normal');
+                    dom.flameStatus.innerHTML = 'Estado: Normal';
+                    dom.flameStatus.style.color = '';
+                    addSystemLog(`✅ Alerta desactivada.`, 'info');
                 }
             }
-            if (!dangerMode && tempVal >= 40.0 && !emergenciaActivaMQTT) {
-                setDangerMode(true, "Temperatura crítica > 40°C");
+            function resetAlertaForzado() {
+                emergenciaActivaMQTT = false;
+                setDangerMode(false, "");
+                if (simulationActive && mqttClient && mqttConnected) {
+                    mqttClient.publish('fxi/simular', 'FUEGO_OFF');
+                    simulationActive = false;
+                }
+                dom.netStatus.innerText = "Alerta reiniciada manualmente";
+                showToast("Alerta reseteada");
+                setTimeout(() => {
+                    if (!dangerMode) {
+                        dom.netStatus.innerText = currentMode === 'mqtt' ? "MQTT: Conectado" : "HTTP: Conectado";
+                    } else dom.netStatus.innerText = "Modo peligro activo";
+                }, 2000);
             }
-        }
-        function actualizarHumedad(hum) {
-            const humVal = parseFloat(hum);
-            if (isNaN(humVal)) return;
-            document.getElementById('hum-val').innerHTML = `${Math.round(humVal)}<span class="unit">%</span>`;
-            document.getElementById('bar-hum').style.height = Math.min(100, humVal) + '%';
-        }
-        function actualizarRSSI(rssi) {
-            const el = document.getElementById('rssi-val');
-            el.innerHTML = `${rssi}<span class="unit">dBm</span>`;
-            if (rssi > -60) el.style.color = '#81C784';
-            else if (rssi > -75) el.style.color = '#FFD54F';
-            else el.style.color = '#F06292';
-        }
-        function actualizarGas(gas) {
-            const gasVal = parseInt(gas);
-            if (isNaN(gasVal)) return;
-            document.getElementById('gas-val').innerHTML = `${gasVal}<span class="unit">ppm</span>`;
-            let altura = Math.min(100, gasVal / 20);
-            document.getElementById('bar-gas').style.height = altura + '%';
-        }
+            function addSystemLog(message, level = 'info') {
+                if (potatoMode || !dom.liveLogs) return; // en modo papa no se actualiza
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry log-${level}`;
+                entry.setAttribute('title', timestamp);
+                entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${timestamp}]</span> ${message}`;
+                dom.liveLogs.prepend(entry);
+                while (dom.liveLogs.children.length > 120) dom.liveLogs.removeChild(dom.liveLogs.lastChild);
+            }
 
-        async function updateStatsUI() {
-            if (!adminAuthenticated) return;
-            try {
-                if (currentMode === 'mqtt') {
-                    const stats = await sendAdminCommand('get_stats');
+            /* ========== GRÁFICO SVG (con throttle y respeto a modo papa) ========== */
+            function drawSVGNow() {
+                if (potatoMode) return; // no dibujar tendencias en modo papa
+                const pointsCount = Math.min(tempHistory.length, currentPoints);
+                if (pointsCount < 2) return;
+                const temps = tempHistory.slice(-pointsCount);
+                const hums = humHistory.slice(-pointsCount);
+                const gases = gasHistory.slice(-pointsCount);
+                let maxTemp = Math.max(...temps, 35), minTemp = Math.min(...temps, 15);
+                let maxHum = Math.max(...hums, 80), minHum = Math.min(...hums, 20);
+                let maxGas = Math.max(...gases, 500), minGas = Math.min(...gases, 0);
+                const pad = 0.1;
+                maxTemp += (maxTemp - minTemp) * pad; minTemp -= (maxTemp - minTemp) * pad;
+                maxHum += (maxHum - minHum) * pad; minHum -= (maxHum - minHum) * pad;
+                maxGas += (maxGas - minGas) * pad; minGas -= (maxGas - minGas) * pad;
+                if (minTemp < 0) minTemp = 0;
+                if (minHum < 0) minHum = 0;
+                if (minGas < 0) minGas = 0;
+                const graphLeft = 40, graphRight = 560, graphWidth = graphRight - graphLeft;
+                const graphTop = 15, graphBottom = 145, graphHeight = graphBottom - graphTop;
+                const stepX = graphWidth / (pointsCount - 1);
+                let tempPts = '', humPts = '', gasPts = '';
+                for (let i = 0; i < pointsCount; i++) {
+                    const x = graphLeft + i * stepX;
+                    tempPts += `${x},${graphBottom - ((temps[i] - minTemp) / (maxTemp - minTemp)) * graphHeight} `;
+                    humPts += `${x},${graphBottom - ((hums[i] - minHum) / (maxHum - minHum)) * graphHeight} `;
+                    gasPts += `${x},${graphBottom - ((gases[i] - minGas) / (maxGas - minGas)) * graphHeight} `;
+                }
+                dom.tempLine.setAttribute('points', tempPts);
+                dom.humLine.setAttribute('points', humPts);
+                dom.gasLine.setAttribute('points', gasPts);
+                const avgTemp = (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1);
+                const avgHum = (hums.reduce((a,b)=>a+b,0)/hums.length).toFixed(0);
+                const avgGas = Math.round(gases.reduce((a,b)=>a+b,0)/gases.length);
+                dom.avgText.innerHTML = `📊 Promedio (últimos ${currentPoints}): Temp ${avgTemp}°C / Hum ${avgHum}% / Gas ${avgGas}ppm`;
+            }
+            function throttledSVGUpdate() {
+                if (potatoMode) return;
+                const now = performance.now();
+                if (now - lastSvgDrawTime < SVG_THROTTLE) return;
+                lastSvgDrawTime = now;
+                drawSVGNow();
+            }
+            function addDataPoint(temp, hum, gas) {
+                if (!isNaN(temp) && temp !== null) tempHistory.push(temp);
+                if (!isNaN(hum) && hum !== null) humHistory.push(hum);
+                if (!isNaN(gas) && gas !== null) gasHistory.push(gas);
+                if (tempHistory.length > 200) { tempHistory.shift(); humHistory.shift(); gasHistory.shift(); }
+                throttledSVGUpdate();
+            }
+
+            /* ========== ACTUALIZACIÓN DE VALORES ========== */
+            function actualizarTemperatura(temp) {
+                const tempVal = parseFloat(temp);
+                if (isNaN(tempVal)) return;
+                dom.tempVal.innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
+                dom.barTemp.style.height = Math.min(100, tempVal * 2) + '%';
+                let desc = '';
+                if (tempVal < 20) desc = 'Ambiente fresco';
+                else if (tempVal < 30) desc = 'Temperatura normal';
+                else if (tempVal < 40) desc = 'Calor elevado';
+                else desc = '¡PELIGRO! Calor extremo';
+                dom.descVal.innerText = desc;
+
+                if (dangerMode) {
+                    if (emergenciaActivaMQTT) {
+                        if (tempVal < UMBRAL_DESACTIVACION_FUEGO) {
+                            setDangerMode(false, "");
+                            emergenciaActivaMQTT = false;
+                        }
+                    } else {
+                        if (tempVal < UMBRAL_DESACTIVACION_CRITICA) setDangerMode(false, "");
+                    }
+                }
+                if (!dangerMode && tempVal >= 40.0 && !emergenciaActivaMQTT) setDangerMode(true, "Temperatura crítica > 40°C");
+            }
+            function actualizarHumedad(hum) {
+                const humVal = parseFloat(hum);
+                if (isNaN(humVal)) return;
+                dom.humVal.innerHTML = `${Math.round(humVal)}<span class="unit">%</span>`;
+                dom.barHum.style.height = Math.min(100, humVal) + '%';
+            }
+            function actualizarRSSI(rssi) {
+                dom.rssiVal.innerHTML = `${rssi}<span class="unit">dBm</span>`;
+                if (rssi > -60) dom.rssiVal.style.color = '#81C784';
+                else if (rssi > -75) dom.rssiVal.style.color = '#FFD54F';
+                else dom.rssiVal.style.color = '#F06292';
+            }
+            function actualizarGas(gas) {
+                const gasVal = parseInt(gas);
+                if (isNaN(gasVal)) return;
+                dom.gasVal.innerHTML = `${gasVal}<span class="unit">ppm</span>`;
+                dom.barGas.style.height = Math.min(100, gasVal / 20) + '%';
+            }
+
+            function formatUptime(seconds) {
+                let d = Math.floor(seconds / 86400);
+                let h = Math.floor((seconds % 86400) / 3600);
+                let m = Math.floor((seconds % 3600) / 60);
+                let s = seconds % 60;
+                return `${d}d ${h}h ${m}m ${s}s`;
+            }
+
+            /* ========== ADMIN UI ========== */
+            async function updateStatsUI() {
+                if (!adminAuthenticated || potatoMode) return;
+                try {
+                    let stats;
+                    if (currentMode === 'mqtt') stats = await sendAdminCommand('get_stats');
+                    else stats = await httpGetJson('/info');
                     const sketchPercent = stats.sketch_percent || 45;
                     const littlefsPercent = stats.littlefs_percent || 23;
                     const freePercent = 100 - (sketchPercent + littlefsPercent);
@@ -1030,7 +1017,7 @@
                     const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
                     const totalKB = 1992 + 128;
                     const mdnsHost = stats.mdns || 'fluxaignis_ota.local';
-                    document.getElementById('statsGrid').innerHTML = `
+                    dom.statsGrid.innerHTML = `
                         <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${stats.firmware || '--'}</div></div>
                         <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
                         <div class="stat-card"><div class="stat-label">RAM (Heap)</div><div class="stat-value">${heapPercent}%</div><div class="progress-bar"><div class="progress-fill" style="width: ${heapPercent}%"></div></div></div>
@@ -1040,390 +1027,488 @@
                         <div class="stat-card"><div class="stat-label">MQTT broker</div><div class="stat-value">${stats.mqtt_status || '--'}</div></div>
                         <div class="stat-card"><div class="stat-label">mDNS</div><div class="stat-value">${mdnsHost}</div></div>
                     `;
-                } else await httpUpdateStatsUI();
-            } catch(e) { document.getElementById('statsGrid').innerHTML = `<div class="stat-card">Error</div>`; }
-        }
-        async function updateLogsUI() {
-            if (!adminAuthenticated) return;
-            try {
-                if (currentMode === 'mqtt') {
-                    const data = await sendAdminCommand('get_logs');
-                    const logs = data.logs || [];
-                    const logDiv = document.getElementById('liveLogs');
-                    if (!logDiv) return;
-                    if (logs.length === 0) { logDiv.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>'; return; }
-                    logDiv.innerHTML = '';
+                } catch(e) { dom.statsGrid.innerHTML = `<div class="stat-card">Error</div>`; }
+            }
+            async function updateLogsUI() {
+                if (!adminAuthenticated || potatoMode) return;
+                try {
+                    let logs;
+                    if (currentMode === 'mqtt') {
+                        const data = await sendAdminCommand('get_logs');
+                        logs = data.logs || [];
+                    } else {
+                        const data = await httpGetJson('/logs');
+                        logs = data.logs || [];
+                    }
+                    if (!dom.liveLogs) return;
+                    if (logs.length === 0) { dom.liveLogs.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>'; return; }
+                    dom.liveLogs.innerHTML = '';
+                    const frag = document.createDocumentFragment();
                     logs.slice().reverse().forEach(log => {
                         const t = new Date(log.timestamp).toLocaleTimeString();
                         const entry = document.createElement('div');
                         entry.className = `log-entry log-${log.level}`;
                         entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
-                        logDiv.appendChild(entry);
+                        frag.appendChild(entry);
                     });
-                } else await httpUpdateLogsUI();
-            } catch(e) {}
-        }
-        async function measurePing() {
-            if (!adminAuthenticated) return;
-            try {
-                if (currentMode === 'mqtt') {
-                    const start = performance.now();
-                    await sendAdminCommand('ping');
+                    dom.liveLogs.appendChild(frag);
+                } catch(e) {}
+            }
+            async function measurePing() {
+                if (!adminAuthenticated || potatoMode) return;
+                const start = performance.now();
+                try {
+                    if (currentMode === 'mqtt') await sendAdminCommand('ping');
+                    else await fetch('/estado', { method: 'HEAD' });
                     const duration = performance.now() - start;
                     pingHistory.push(duration);
                     if (pingHistory.length > 20) pingHistory.shift();
                     drawPingGraph();
-                    const avg = pingHistory.reduce((a,b)=>a+b,0)/pingHistory.length;
-                    document.getElementById('avgPing').innerText = avg.toFixed(1);
-                } else await httpMeasurePing();
-            } catch(e) {}
-        }
-        function drawPingGraph() {
-            const canvas = document.getElementById('pingCanvas');
-            if (!canvas) return;
-            const w = canvas.clientWidth, h = 70;
-            canvas.width = w; canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, w, h);
-            if (pingHistory.length < 2) return;
-            const step = w / (pingHistory.length - 1);
-            ctx.beginPath();
-            ctx.strokeStyle = "#7AF0D4";
-            ctx.lineWidth = 2;
-            for (let i=0; i<pingHistory.length; i++) {
-                let x = i * step;
-                let y = h - (pingHistory[i] / 200) * h;
-                if (y < 0) y = 0;
-                if (i===0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
+                    dom.avgPing.innerText = (pingHistory.reduce((a,b)=>a+b,0)/pingHistory.length).toFixed(1);
+                } catch(e) {}
             }
-            ctx.stroke();
-        }
-        function formatUptime(seconds) {
-            let d = Math.floor(seconds / 86400);
-            let h = Math.floor((seconds % 86400) / 3600);
-            let m = Math.floor((seconds % 3600) / 60);
-            let s = seconds % 60;
-            return `${d}d ${h}h ${m}m ${s}s`;
-        }
-        async function sendCommand(cmd) {
-            if (!adminAuthenticated) { showToast("Accede al panel de admin primero", true); return; }
-            addSystemLog(`Comando: ${cmd} (modo ${currentMode})`, 'info');
-            try {
-                if (currentMode === 'mqtt') {
-                    if (cmd === 'restart') { await sendAdminCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
-                    else if (cmd === 'check_ota') { await sendAdminCommand('check_ota'); showToast("Comprobando actualizaciones..."); }
-                    else if (cmd === 'toggle_sim') { const resp = await sendAdminCommand('toggle_sim'); simulationActive = resp.simulating; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`); if (mqttClient && mqttConnected) mqttClient.publish('fxi/simular', simulationActive ? 'FUEGO_ON' : 'FUEGO_OFF'); }
-                    else if (cmd === 'clear_logs') { await sendAdminCommand('clear_logs'); document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs limpiados</div>'; showToast("Logs limpiados"); }
-                    else if (cmd === 'update_fw') { await sendAdminCommand('update_fw'); showToast("Iniciando actualización de firmware..."); }
-                    else if (cmd === 'update_html') { await sendAdminCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => window.location.reload(), 1000); }
-                } else {
-                    if (cmd === 'restart') { await httpSendCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
-                    else if (cmd === 'check_ota') { await httpSendCommand('check_ota'); showToast("Comprobando actualizaciones..."); }
-                    else if (cmd === 'toggle_sim') { await httpSendCommand('toggle_sim'); simulationActive = !simulationActive; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`); }
-                    else if (cmd === 'clear_logs') { await httpSendCommand('clear_logs'); document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs limpiados</div>'; showToast("Logs limpiados"); }
-                    else if (cmd === 'update_fw') { await httpSendCommand('update_fw'); showToast("Iniciando actualización de firmware..."); }
-                    else if (cmd === 'update_html') { await httpSendCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => window.location.reload(), 1000); }
+            function drawPingGraph() {
+                if (potatoMode) return;
+                const canvas = dom.pingCanvas;
+                if (!canvas) return;
+                const w = canvas.clientWidth, h = 70;
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, w, h);
+                if (pingHistory.length < 2) return;
+                const step = w / (pingHistory.length - 1);
+                ctx.beginPath();
+                ctx.strokeStyle = "#7AF0D4";
+                ctx.lineWidth = 2;
+                for (let i=0; i<pingHistory.length; i++) {
+                    let x = i * step;
+                    let y = h - (pingHistory[i] / 200) * h;
+                    if (y < 0) y = 0;
+                    if (i===0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
                 }
-            } catch(e) { addSystemLog(`Error en comando ${cmd}: ${e.message}`, 'error'); showToast(`Error: ${e.message}`, true); }
-        }
-
-        // ========== CONTROL DEL SERVO ==========
-        async function toggleServo() {
-            const btn = document.getElementById('btn-servo');
-            btn.innerText = "ENVIANDO...";
-            btn.style.opacity = "0.7";
-            if (currentMode === 'mqtt' && mqttClient && mqttConnected) {
-                mqttClient.publish('fxi/comandos', 'TOGGLE');
-                setTimeout(() => {
-                    btn.style.opacity = "1";
-                    if (btn.classList.contains('active')) {
-                        btn.classList.remove('active');
-                        btn.innerText = "DESACTIVADO";
-                        addSystemLog("🔁 Servo desactivado por MQTT", 'info');
-                    } else {
-                        btn.classList.add('active');
-                        btn.innerText = "SISTEMA ACTIVO";
-                        addSystemLog("🔁 Servo activado por MQTT", 'info');
-                    }
-                }, 300);
-            } else {
-                try {
-                    const res = await fetch('/toggleServo');
-                    const state = await res.text();
-                    btn.style.opacity = "1";
-                    if (state === "ON") {
-                        btn.classList.add('active');
-                        btn.innerText = "SISTEMA ACTIVO";
-                        addSystemLog("🔁 Servo activado (HTTP)", 'info');
-                    } else {
-                        btn.classList.remove('active');
-                        btn.innerText = "DESACTIVADO";
-                        addSystemLog("🔁 Servo desactivado (HTTP)", 'info');
-                    }
-                } catch(e) {
-                    btn.classList.remove('active');
-                    btn.style.opacity = "1";
-                    btn.innerText = "SIN CONEXIÓN";
-                    setTimeout(() => btn.innerText = "DESACTIVADO", 3000);
-                    addSystemLog("❌ Error en comando del servo.", 'error');
-                    showToast("Error al comunicar con el ESP32", true);
-                }
+                ctx.stroke();
             }
-        }
 
-        // ========== MQTT ==========
-        function conectarMQTT() {
-            if (mqttClient && mqttClient.connected) mqttClient.end();
-            mqttClient = mqtt.connect(mqttBroker, mqttOptions);
-            mqttClient.on('connect', () => {
-                mqttConnected = true;
-                document.getElementById('esp-status').innerText = 'Online (MQTT)';
-                document.getElementById('esp-status').classList.remove('offline');
-                document.getElementById('esp-status').classList.add('status-badge');
-                document.getElementById('net-status').innerHTML = 'MQTT: Conectado';
-                document.getElementById('net-status').style.color = 'var(--text-sec)';
-                mqttClient.subscribe('fxi/datos');
-                mqttClient.subscribe('fxi/rssi');
-                mqttClient.subscribe('fxi/emergencia');
-                mqttClient.subscribe('fxi/simular');
-                mqttClient.subscribe('fxi/admin/resp');
-                mqttClient.subscribe('fxi/logs');
-                addSystemLog("✅ MQTT conectado", 'info');
-                if (forcedMode !== 'http') setMode('mqtt');
-                if (currentMode === 'http') setMode('mqtt');
-            });
-            mqttClient.on('message', (topic, payload) => {
-                if (topic === 'fxi/admin/resp') { handleAdminResponse(topic, payload); return; }
+            async function sendCommand(cmd) {
+                if (!adminAuthenticated) { showToast("Accede al panel de admin primero", true); return; }
+                addSystemLog(`Comando: ${cmd} (modo ${currentMode})`, 'info');
                 try {
-                    const msg = payload.toString();
-                    if (topic === 'fxi/datos') {
-                        const data = JSON.parse(msg);
-                        if (data.temp !== undefined && data.hum !== undefined) {
-                            actualizarTemperatura(data.temp);
-                            actualizarHumedad(data.hum);
-                            addDataPoint(data.temp, data.hum, data.gas);
+                    if (currentMode === 'mqtt') {
+                        if (cmd === 'restart') { await sendAdminCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
+                        else if (cmd === 'check_ota') { await sendAdminCommand('check_ota'); showToast("Comprobando actualizaciones..."); }
+                        else if (cmd === 'toggle_sim') { const resp = await sendAdminCommand('toggle_sim'); simulationActive = resp.simulating; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`); if (mqttClient && mqttConnected) mqttClient.publish('fxi/simular', simulationActive ? 'FUEGO_ON' : 'FUEGO_OFF'); }
+                        else if (cmd === 'clear_logs') { await sendAdminCommand('clear_logs'); dom.liveLogs.innerHTML = '<div class="log-entry log-info">Logs limpiados</div>'; showToast("Logs limpiados"); }
+                        else if (cmd === 'update_fw') { await sendAdminCommand('update_fw'); showToast("Iniciando actualización de firmware..."); }
+                        else if (cmd === 'update_html') { await sendAdminCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => window.location.reload(), 1000); }
+                    } else {
+                        if (cmd === 'restart') { await httpSendCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
+                        else if (cmd === 'check_ota') { await httpSendCommand('check_ota'); showToast("Comprobando actualizaciones..."); }
+                        else if (cmd === 'toggle_sim') { await httpSendCommand('toggle_sim'); simulationActive = !simulationActive; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`); }
+                        else if (cmd === 'clear_logs') { await httpSendCommand('clear_logs'); dom.liveLogs.innerHTML = '<div class="log-entry log-info">Logs limpiados</div>'; showToast("Logs limpiados"); }
+                        else if (cmd === 'update_fw') { await httpSendCommand('update_fw'); showToast("Iniciando actualización de firmware..."); }
+                        else if (cmd === 'update_html') { await httpSendCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => window.location.reload(), 1000); }
+                    }
+                } catch(e) { addSystemLog(`Error en comando ${cmd}: ${e.message}`, 'error'); showToast(`Error: ${e.message}`, true); }
+            }
+
+            /* ========== SERVO ========== */
+            async function toggleServo() {
+                const btn = dom.btnServo;
+                btn.innerText = "ENVIANDO...";
+                btn.style.opacity = "0.7";
+                if (currentMode === 'mqtt' && mqttClient && mqttConnected) {
+                    mqttClient.publish('fxi/comandos', 'TOGGLE');
+                    setTimeout(() => {
+                        btn.style.opacity = "1";
+                        if (btn.classList.contains('active')) {
+                            btn.classList.remove('active');
+                            btn.innerText = "DESACTIVADO";
+                            if (!potatoMode) addSystemLog("🔁 Servo desactivado por MQTT", 'info');
+                        } else {
+                            btn.classList.add('active');
+                            btn.innerText = "SISTEMA ACTIVO";
+                            if (!potatoMode) addSystemLog("🔁 Servo activado por MQTT", 'info');
                         }
-                        if (data.gas !== undefined) actualizarGas(data.gas);
-                    } else if (topic === 'fxi/rssi') {
-                        const data = JSON.parse(msg);
-                        if (data.rssi !== undefined) actualizarRSSI(data.rssi);
-                    } else if (topic === 'fxi/emergencia') {
-                        const data = JSON.parse(msg);
-                        const motivo = data.motivo || "Incendio detectado";
-                        if (motivo.includes("AUMENTO") || motivo.includes("sospechoso")) return;
-                        setDangerMode(true, motivo);
-                        emergenciaActivaMQTT = true;
-                        if (Notification.permission === "granted") new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo });
-                        const statusDiv = document.getElementById('net-status');
-                        statusDiv.innerHTML = "🔴 ¡EMERGENCIA! " + motivo;
-                        statusDiv.style.color = "#FF3D00";
-                        setTimeout(() => { if (!dangerMode && mqttConnected) { statusDiv.innerHTML = "MQTT: Conectado"; statusDiv.style.color = "var(--text-sec)"; } }, 5000);
-                    } else if (topic === 'fxi/simular') simulationActive = (msg === 'FUEGO_ON');
-                    else if (topic === 'fxi/logs') {
-                        const data = JSON.parse(msg);
-                        addSystemLog(data.message || '', data.level || 'info');
+                    }, 300);
+                } else {
+                    try {
+                        const res = await fetch('/toggleServo');
+                        const state = await res.text();
+                        btn.style.opacity = "1";
+                        if (state === "ON") {
+                            btn.classList.add('active');
+                            btn.innerText = "SISTEMA ACTIVO";
+                        } else {
+                            btn.classList.remove('active');
+                            btn.innerText = "DESACTIVADO";
+                        }
+                    } catch(e) {
+                        btn.classList.remove('active');
+                        btn.style.opacity = "1";
+                        btn.innerText = "SIN CONEXIÓN";
+                        setTimeout(() => btn.innerText = "DESACTIVADO", 3000);
+                        showToast("Error al comunicar con el ESP32", true);
                     }
-                } catch(e) { console.error(e); }
-            });
-            mqttClient.on('offline', () => {
-                mqttConnected = false;
-                document.getElementById('esp-status').innerText = 'Offline (MQTT)';
-                document.getElementById('esp-status').classList.add('offline');
-                document.getElementById('net-status').innerHTML = 'MQTT: Desconectado';
-                document.getElementById('net-status').style.color = '#F06292';
-                addSystemLog("⚠️ MQTT desconectado, cambiando a modo HTTP", 'warn');
-                if (forcedMode !== 'mqtt') setMode('http');
-            });
-        }
+                }
+            }
 
-        function setMode(mode) {
-            if (mode === currentMode) return;
-            currentMode = mode;
-            document.getElementById('admin-mode-badge').innerText = mode.toUpperCase();
-            document.getElementById('modo-indicador').innerHTML = `Modo: ${mode.toUpperCase()}`;
-            addSystemLog(`Cambiando a modo ${mode.toUpperCase()}`, 'info');
-            if (adminAuthenticated) {
-                if (statsInterval) clearInterval(statsInterval);
-                if (logsInterval) clearInterval(logsInterval);
-                statsInterval = setInterval(() => { if (adminAuthenticated) updateStatsUI(); }, mode === 'mqtt' ? 10000 : 8000);
-                logsInterval = setInterval(() => { if (adminAuthenticated) updateLogsUI(); }, mode === 'mqtt' ? 8000 : 6000);
+            /* ========== MQTT ========== */
+            const mqttOptions = {
+                connectTimeout: 4000,
+                clientId: 'web_' + Math.random().toString(16).substr(2, 8),
+                username: 'Admin',
+                password: 'FluxaIgnis2026',
+            };
+            const mqttBroker = 'wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt';
+
+            function conectarMQTT() {
+                if (mqttClient && mqttClient.connected) mqttClient.end();
+                mqttClient = mqtt.connect(mqttBroker, mqttOptions);
+                mqttClient.on('connect', () => {
+                    mqttConnected = true;
+                    dom.espStatus.innerText = 'Online (MQTT)';
+                    dom.espStatus.classList.remove('offline');
+                    dom.netStatus.innerHTML = 'MQTT: Conectado';
+                    dom.netStatus.style.color = 'var(--text-sec)';
+                    mqttClient.subscribe('fxi/datos');
+                    mqttClient.subscribe('fxi/rssi');
+                    mqttClient.subscribe('fxi/emergencia');
+                    mqttClient.subscribe('fxi/simular');
+                    mqttClient.subscribe('fxi/admin/resp');
+                    mqttClient.subscribe('fxi/logs');
+                    if (!potatoMode) addSystemLog("✅ MQTT conectado", 'info');
+                    if (forcedMode !== 'http') setMode('mqtt');
+                    if (currentMode === 'http') setMode('mqtt');
+                });
+                mqttClient.on('message', (topic, payload) => {
+                    if (topic === 'fxi/admin/resp') { handleAdminResponse(topic, payload); return; }
+                    try {
+                        const msg = payload.toString();
+                        if (topic === 'fxi/datos') {
+                            if (potatoMode) {
+                                const now = Date.now();
+                                if (now - lastPotatoDataUpdate < 10000) return;
+                                lastPotatoDataUpdate = now;
+                            }
+                            const data = JSON.parse(msg);
+                            if (data.temp !== undefined) actualizarTemperatura(data.temp);
+                            if (data.hum !== undefined) actualizarHumedad(data.hum);
+                            if (data.gas !== undefined) actualizarGas(data.gas);
+                            addDataPoint(data.temp, data.hum, data.gas);
+                        } else if (topic === 'fxi/rssi') {
+                            const data = JSON.parse(msg);
+                            if (data.rssi !== undefined) actualizarRSSI(data.rssi);
+                        } else if (topic === 'fxi/emergencia') {
+                            const data = JSON.parse(msg);
+                            const motivo = data.motivo || "Incendio detectado";
+                            if (motivo.includes("AUMENTO") || motivo.includes("sospechoso")) return;
+                            setDangerMode(true, motivo);
+                            emergenciaActivaMQTT = true;
+                            if (Notification.permission === "granted") new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo });
+                            dom.netStatus.innerHTML = "🔴 ¡EMERGENCIA! " + motivo;
+                            dom.netStatus.style.color = "#FF3D00";
+                        } else if (topic === 'fxi/simular') simulationActive = (msg === 'FUEGO_ON');
+                        else if (topic === 'fxi/logs') {
+                            if (potatoMode) return;
+                            const data = JSON.parse(msg);
+                            addSystemLog(data.message || '', data.level || 'info');
+                        }
+                    } catch(e) { console.error(e); }
+                });
+                mqttClient.on('offline', () => {
+                    mqttConnected = false;
+                    dom.espStatus.innerText = 'Offline (MQTT)';
+                    dom.espStatus.classList.add('offline');
+                    dom.netStatus.innerHTML = 'MQTT: Desconectado';
+                    dom.netStatus.style.color = '#F06292';
+                    if (!potatoMode) addSystemLog("⚠️ MQTT desconectado, cambiando a modo HTTP", 'warn');
+                    if (forcedMode !== 'mqtt') setMode('http');
+                });
+            }
+
+            function setMode(mode) {
+                if (mode === currentMode) return;
+                currentMode = mode;
+                dom.adminModeBadge.innerText = mode.toUpperCase();
+                dom.modoIndicador.innerHTML = `Modo: ${mode.toUpperCase()}`;
+                if (!potatoMode) addSystemLog(`Cambiando a modo ${mode.toUpperCase()}`, 'info');
+                if (adminAuthenticated && !potatoMode) {
+                    clearInterval(statsInterval);
+                    clearInterval(logsInterval);
+                    statsInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) updateStatsUI(); }, mode === 'mqtt' ? 10000 : 8000);
+                    logsInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) updateLogsUI(); }, mode === 'mqtt' ? 8000 : 6000);
+                    updateStatsUI();
+                    updateLogsUI();
+                }
+                if (mode === 'http') {
+                    clearInterval(httpPollInterval);
+                    httpPollInterval = setInterval(() => { if (currentMode === 'http') httpGetEstado().catch(e => console.warn); }, potatoMode ? 10000 : 2000);
+                    httpGetEstado().catch(e => console.warn);
+                } else {
+                    clearInterval(httpPollInterval);
+                }
+            }
+
+            function iniciarSistema() {
+                clearInterval(statsInterval);
+                clearInterval(logsInterval);
+                clearInterval(httpPollInterval);
+                conectarMQTT();
+                setTimeout(() => { if (!mqttConnected && currentMode !== 'http' && forcedMode !== 'mqtt') setMode('http'); }, 5000);
+                showToast("Reconectando...");
+            }
+
+            /* ========== ADMIN PANEL ========== */
+            async function expandAdmin() {
+                if (potatoMode) return; // No se puede expandir en modo papa
+                if (!adminAuthenticated) {
+                    const pwd = await showPasswordModal("Acceso restringido", "Contraseña de administrador:");
+                    if (pwd === adminPassword) {
+                        adminAuthenticated = true;
+                        dom.adminCard.classList.add('expanded');
+                        startAdminServices();
+                        addSystemLog("🔓 Acceso concedido", 'info');
+                        showToast("Acceso concedido");
+                    } else if (pwd !== null) showToast("Contraseña incorrecta", true);
+                    return;
+                } else {
+                    dom.adminCard.classList.add('expanded');
+                    startAdminServices();
+                }
+            }
+            function collapseAdmin() {
+                dom.adminCard.classList.remove('expanded');
+                clearInterval(statsInterval);
+                clearInterval(logsInterval);
+                clearInterval(pingInterval);
+            }
+            function startAdminServices() {
+                if (potatoMode) return;
+                clearInterval(statsInterval);
+                clearInterval(logsInterval);
+                clearInterval(pingInterval);
                 updateStatsUI();
                 updateLogsUI();
+                statsInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) updateStatsUI(); }, currentMode === 'mqtt' ? 10000 : 8000);
+                logsInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) updateLogsUI(); }, currentMode === 'mqtt' ? 8000 : 6000);
+                pingInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) measurePing(); }, 10000);
+                measurePing();
             }
-            if (mode === 'http') {
-                if (window.httpInterval) clearInterval(window.httpInterval);
-                window.httpInterval = setInterval(() => { if (currentMode === 'http') httpGetEstado().catch(e => console.warn); }, 2000);
-                httpGetEstado().catch(e => console.warn);
-            } else {
-                if (window.httpInterval) clearInterval(window.httpInterval);
-            }
-        }
 
-        function iniciarSistema() {
-            if (statsInterval) clearInterval(statsInterval);
-            if (logsInterval) clearInterval(logsInterval);
-            statsInterval = logsInterval = null;
-            conectarMQTT();
-            setTimeout(() => { if (!mqttConnected && currentMode !== 'http' && forcedMode !== 'mqtt') setMode('http'); }, 5000);
-            showToast("Reconectando...");
-        }
-
-        // ========== ADMIN PANEL ==========
-        const adminCard = document.getElementById('adminCard');
-        const closeAdminBtn = document.getElementById('closeAdmin');
-        async function expandAdmin() {
-            if (!adminAuthenticated) {
-                const pwd = await showPasswordModal("Acceso restringido", "Contraseña de administrador:");
-                if (pwd === adminPassword) {
-                    adminAuthenticated = true;
-                    adminCard.classList.add('expanded');
-                    startAdminServices();
-                    addSystemLog("🔓 Acceso concedido al panel de administración", 'info');
-                    showToast("Acceso concedido");
-                } else if (pwd !== null) showToast("Contraseña incorrecta", true);
-                return;
-            } else { adminCard.classList.add('expanded'); startAdminServices(); }
-        }
-        function collapseAdmin() {
-            adminCard.classList.remove('expanded');
-            if (statsInterval) clearInterval(statsInterval);
-            if (logsInterval) clearInterval(logsInterval);
-            statsInterval = logsInterval = null;
-        }
-        function startAdminServices() {
-            if (statsInterval) clearInterval(statsInterval);
-            if (logsInterval) clearInterval(logsInterval);
-            updateStatsUI();
-            updateLogsUI();
-            statsInterval = setInterval(() => { if (adminAuthenticated) updateStatsUI(); }, currentMode === 'mqtt' ? 10000 : 8000);
-            logsInterval = setInterval(() => { if (adminAuthenticated) updateLogsUI(); }, currentMode === 'mqtt' ? 8000 : 6000);
-            setInterval(() => { if (adminAuthenticated) measurePing(); }, 10000);
-            measurePing();
-        }
-
-        // ========== INICIALIZACIÓN ==========
-        document.querySelectorAll('.range-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+            /* ========== EVENTOS ========== */
+            dom.rangeButtons.addEventListener('click', (e) => {
+                const btn = e.target.closest('.range-btn');
+                if (!btn) return;
+                dom.rangeButtons.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 currentPoints = parseInt(btn.getAttribute('data-points'), 10);
-                drawSVG();
+                lastSvgDrawTime = 0;
+                throttledSVGUpdate();
             });
-        });
-        document.querySelector('.range-btn[data-points="20"]').classList.add('active');
-        document.getElementById('resetAlertBtnSquare').addEventListener('click', resetAlertaForzado);
-        document.getElementById('reconnectBtn').addEventListener('click', iniciarSistema);
-        document.getElementById('btn-servo').addEventListener('click', toggleServo);
-        document.getElementById('forceHttpBtn').addEventListener('click', () => { forcedMode = 'http'; if (mqttConnected) mqttClient.end(); setMode('http'); });
-        document.getElementById('forceMqttBtn').addEventListener('click', () => { forcedMode = null; if (mqttConnected) setMode('mqtt'); else showToast("MQTT no conectado", true); });
+            document.querySelector('.range-btn[data-points="20"]').classList.add('active');
 
-        const actions = [
-            { icon: "🔄", label: "Reiniciar ESP32", cmd: "restart" },
-            { icon: "🔍", label: "Comprobar OTA", cmd: "check_ota" },
-            { icon: "🔥", label: "Simular fuego", cmd: "toggle_sim" },
-            { icon: "🗑", label: "Limpiar logs", cmd: "clear_logs" }
-        ];
-        const updateActions = [
-            { icon: "📡", label: "Actualizar Firmware", cmd: "update_fw" },
-            { icon: "🌐", label: "Actualizar HTML", cmd: "update_html" }
-        ];
-        const actionContainer = document.getElementById('actionBlocks');
-        const updateContainer = document.getElementById('updateBlocks');
-        if (actionContainer) {
-            actionContainer.innerHTML = '';
-            actions.forEach(a => {
-                const div = document.createElement('div');
-                div.className = 'action-block';
-                div.innerHTML = `<span class="action-icon">${a.icon}</span><span class="action-label">${a.label}</span>`;
-                div.addEventListener('click', () => sendCommand(a.cmd));
-                actionContainer.appendChild(div);
+            dom.adminCard.addEventListener('click', (e) => {
+                if (potatoMode) return;
+                if (e.target === dom.closeAdmin || e.target.parentElement === dom.closeAdmin) {
+                    collapseAdmin();
+                    return;
+                }
+                if (!dom.adminCard.classList.contains('expanded') && !e.target.closest('.admin-expanded')) {
+                    expandAdmin();
+                }
             });
-        }
-        if (updateContainer) {
-            updateContainer.innerHTML = '';
-            updateActions.forEach(a => {
-                const div = document.createElement('div');
-                div.className = 'action-block';
-                div.innerHTML = `<span class="action-icon">${a.icon}</span><span class="action-label">${a.label}</span>`;
-                div.addEventListener('click', () => sendCommand(a.cmd));
-                updateContainer.appendChild(div);
-            });
-        }
 
-        adminCard.addEventListener('click', (e) => {
-            if (e.target === closeAdminBtn || e.target.parentElement === closeAdminBtn) { collapseAdmin(); return; }
-            if (!adminCard.classList.contains('expanded')) expandAdmin();
-        });
-        document.querySelectorAll('.admin-section-header').forEach(header => {
-            header.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const current = header.closest('.admin-section');
-                const isOpen = current.classList.contains('open');
-                document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('open'));
-                if (!isOpen) current.classList.add('open');
+            document.querySelectorAll('.admin-section-header').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    if (potatoMode) return;
+                    e.stopPropagation();
+                    header.closest('.admin-section').classList.toggle('open');
+                });
             });
-        });
-        document.getElementById('toggleTimestampBtn')?.addEventListener('click', () => {
-            showTimestamps = !showTimestamps;
-            document.querySelectorAll('.log-timestamp').forEach(span => {
-                if (showTimestamps) span.classList.add('visible');
-                else span.classList.remove('visible');
-            });
-            document.getElementById('toggleTimestampBtn').innerText = showTimestamps ? "Ocultar timestamps" : "Mostrar timestamps";
-        });
 
-        // Tema y partículas optimizadas
-        const themeBtn = document.getElementById('theme-toggle');
-        themeBtn.onclick = () => {
-            isDarkMode = !isDarkMode;
-            document.body.classList.toggle('light-mode');
-            themeBtn.innerText = isDarkMode ? '✳' : '☀️';
-            initParticles();
-        };
-        const canvasBg = document.getElementById('weather-canvas');
-        const ctxBg = canvasBg.getContext('2d');
-        let particles = [];
-        let animationId = null;
-        let lastTimestamp = 0;
-        function resizeBg() { canvasBg.width = window.innerWidth; canvasBg.height = window.innerHeight; }
-        window.onresize = resizeBg; resizeBg();
-        class Particle {
-            constructor() { this.reset(); }
-            reset() {
-                this.x = Math.random() * canvasBg.width;
-                this.y = Math.random() * canvasBg.height;
-                this.size = Math.random() * 2 + 1;
-                this.alpha = Math.random();
-                this.speed = Math.random() * 0.02;
+            dom.resetAlertBtnSquare.addEventListener('click', resetAlertaForzado);
+            dom.reconnectBtn.addEventListener('click', iniciarSistema);
+            dom.btnServo.addEventListener('click', toggleServo);
+            dom.forceHttpBtn.addEventListener('click', () => { forcedMode = 'http'; if (mqttConnected) mqttClient.end(); setMode('http'); });
+            dom.forceMqttBtn.addEventListener('click', () => { forcedMode = null; if (mqttConnected) setMode('mqtt'); else showToast("MQTT no conectado", true); });
+            dom.toggleTimestampBtn.addEventListener('click', () => {
+                showTimestamps = !showTimestamps;
+                document.querySelectorAll('.log-timestamp').forEach(span => span.classList.toggle('visible', showTimestamps));
+                dom.toggleTimestampBtn.innerText = showTimestamps ? "Ocultar timestamps" : "Mostrar timestamps";
+            });
+
+            function fillActionBlocks(container, list) {
+                container.innerHTML = '';
+                list.forEach(a => {
+                    const div = document.createElement('div');
+                    div.className = 'action-block';
+                    div.innerHTML = `<span class="action-icon">${a.icon}</span><span class="action-label">${a.label}</span>`;
+                    div.addEventListener('click', () => sendCommand(a.cmd));
+                    container.appendChild(div);
+                });
             }
-            update() { this.alpha += this.speed; if(this.alpha > 1 || this.alpha < 0) this.speed *= -1; }
-            draw() {
-                ctxBg.fillStyle = isDarkMode ? `rgba(234,226,209,${this.alpha*0.2})` : `rgba(11,57,84,${this.alpha*0.1})`;
-                ctxBg.beginPath();
-                ctxBg.arc(this.x, this.y, this.size, 0, Math.PI*2);
-                ctxBg.fill();
+            fillActionBlocks(dom.actionBlocks, [
+                { icon: "🔄", label: "Reiniciar ESP32", cmd: "restart" },
+                { icon: "🔍", label: "Comprobar OTA", cmd: "check_ota" },
+                { icon: "🔥", label: "Simular fuego", cmd: "toggle_sim" },
+                { icon: "🗑", label: "Limpiar logs", cmd: "clear_logs" }
+            ]);
+            fillActionBlocks(dom.updateBlocks, [
+                { icon: "📡", label: "Actualizar Firmware", cmd: "update_fw" },
+                { icon: "🌐", label: "Actualizar HTML", cmd: "update_html" }
+            ]);
+
+            /* ========== MODO PAPA ========== */
+            dom.potatoToggle.addEventListener('click', () => {
+                potatoMode = !potatoMode;
+                document.body.classList.toggle('potato-mode', potatoMode);
+                dom.potatoToggle.innerText = potatoMode ? '🍟' : '🥔';
+
+                if (potatoMode) {
+                    // Guardar estado del fondo para restaurar después
+                    previousBgEnabled = bgEnabled;
+                    bgEnabled = false;
+                    dom.bgToggle.innerText = '🚫';
+                    dom.canvasBg.style.display = 'none';
+                    stopParticles();
+
+                    // Detener todos los intervalos de admin
+                    clearInterval(statsInterval);
+                    clearInterval(logsInterval);
+                    clearInterval(pingInterval);
+                    // Ajustar el polling HTTP a 10s
+                    if (currentMode === 'http') {
+                        clearInterval(httpPollInterval);
+                        httpPollInterval = setInterval(() => { if (currentMode === 'http' && potatoMode) httpGetEstado().catch(e => console.warn); }, 10000);
+                    }
+                    lastPotatoDataUpdate = 0;
+                } else {
+                    // Restaurar fondo si estaba activo antes
+                    if (previousBgEnabled) {
+                        bgEnabled = true;
+                        dom.bgToggle.innerText = '✨';
+                        dom.canvasBg.style.display = '';
+                        resizeCanvas();
+                        startParticles();
+                    } else {
+                        bgEnabled = false;
+                        dom.bgToggle.innerText = '🚫';
+                        dom.canvasBg.style.display = 'none';
+                    }
+
+                    // Reactivar servicios de admin si corresponde
+                    if (adminAuthenticated) startAdminServices();
+                    if (currentMode === 'http') {
+                        clearInterval(httpPollInterval);
+                        httpPollInterval = setInterval(() => { if (currentMode === 'http' && !potatoMode) httpGetEstado().catch(e => console.warn); }, 2000);
+                    }
+                    lastSvgDrawTime = 0;
+                    throttledSVGUpdate();
+                }
+            });
+
+            /* ========== TEMA Y PARTÍCULAS ========== */
+            dom.themeToggle.onclick = () => {
+                isDarkMode = !isDarkMode;
+                document.body.classList.toggle('light-mode');
+                dom.themeToggle.innerText = isDarkMode ? '✳' : '☀️';
+                if (bgEnabled && !potatoMode) updateParticleColors();
+            };
+
+            dom.bgToggle.onclick = () => {
+                if (potatoMode) return; // no permitir cambiar fondo en modo papa
+                bgEnabled = !bgEnabled;
+                dom.bgToggle.innerText = bgEnabled ? '✨' : '🚫';
+                dom.canvasBg.style.display = bgEnabled ? '' : 'none';
+                if (bgEnabled) {
+                    resizeCanvas();
+                    startParticles();
+                } else {
+                    stopParticles();
+                }
+            };
+
+            function resizeCanvas() {
+                const scale = 0.5;
+                dom.canvasBg.width = window.innerWidth * scale;
+                dom.canvasBg.height = window.innerHeight * scale;
+                ctxBg.scale(scale, scale);
+                if (bgEnabled && !potatoMode) initParticles();
             }
-        }
-        function initParticles() {
-            particles = [];
-            const count = window.innerWidth < 768 ? 15 : 25;
-            for(let i=0; i<count; i++) particles.push(new Particle());
-            if (animationId) cancelAnimationFrame(animationId);
-            function animate() {
-                ctxBg.clearRect(0,0,canvasBg.width,canvasBg.height);
-                particles.forEach(p => { p.update(); p.draw(); });
-                animationId = requestAnimationFrame(animate);
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                if (bgEnabled && !potatoMode) initParticles();
+            });
+
+            class Particle {
+                constructor() { this.reset(); }
+                reset() {
+                    this.x = Math.random() * dom.canvasBg.width;
+                    this.y = Math.random() * dom.canvasBg.height;
+                    this.size = Math.random() * 1.8 + 0.8;
+                    this.alpha = Math.random();
+                    this.speed = Math.random() * 0.018;
+                }
+                update() { this.alpha += this.speed; if(this.alpha > 1 || this.alpha < 0) this.speed *= -1; }
+                draw() {
+                    ctxBg.fillStyle = isDarkMode ? `rgba(234,226,209,${this.alpha*0.18})` : `rgba(11,57,84,${this.alpha*0.08})`;
+                    ctxBg.beginPath();
+                    ctxBg.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                    ctxBg.fill();
+                }
             }
-            animate();
-        }
-        initParticles();
-        if (Notification.permission === "default") Notification.requestPermission();
-        conectarMQTT();
-        addSystemLog("🚀 Panel optimizado con gas en tendencias y niveles", 'info');
-        setTimeout(() => {
-            if (!mqttConnected && currentMode === 'mqtt' && forcedMode !== 'mqtt') setMode('http');
-        }, 5000);
+            function initParticles() {
+                particles = [];
+                const count = window.innerWidth < 768 ? 6 : (window.innerWidth < 1400 ? 10 : 14);
+                for(let i=0; i<count; i++) particles.push(new Particle());
+            }
+            function updateParticleColors() {
+                // solo cambia el color en draw()
+            }
+            function animateParticles() {
+                if (!bgEnabled || potatoMode) return;
+                ctxBg.clearRect(0,0,dom.canvasBg.width,dom.canvasBg.height);
+                for(let p of particles) { p.update(); p.draw(); }
+                animationId = requestAnimationFrame(animateParticles);
+            }
+            function startParticles() {
+                if (animationId) cancelAnimationFrame(animationId);
+                if (!bgEnabled || potatoMode) return;
+                initParticles();
+                animateParticles();
+            }
+            function stopParticles() {
+                if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+            }
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    stopParticles();
+                    clearInterval(statsInterval);
+                    clearInterval(logsInterval);
+                    clearInterval(pingInterval);
+                    clearInterval(httpPollInterval);
+                } else {
+                    if (bgEnabled && !potatoMode) startParticles();
+                    if (adminAuthenticated && !potatoMode) startAdminServices();
+                    if (currentMode === 'http' && !potatoMode) {
+                        httpPollInterval = setInterval(() => { if (currentMode === 'http' && !potatoMode) httpGetEstado().catch(e => console.warn); }, 2000);
+                    } else if (currentMode === 'http' && potatoMode) {
+                        httpPollInterval = setInterval(() => { if (currentMode === 'http' && potatoMode) httpGetEstado().catch(e => console.warn); }, 10000);
+                    }
+                }
+            });
+
+            resizeCanvas();
+            if (bgEnabled && !potatoMode) startParticles();
+
+            if (Notification.permission === "default") Notification.requestPermission();
+            conectarMQTT();
+            if (!potatoMode) addSystemLog("🚀 Panel listo (modo normal)", 'info');
+            setTimeout(() => {
+                if (!mqttConnected && currentMode === 'mqtt' && forcedMode !== 'mqtt') setMode('http');
+            }, 5000);
+        })();
     </script>
 </body>
 </html>
