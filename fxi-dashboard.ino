@@ -20,7 +20,7 @@
 const float OFFSET_TEMP = 5.0;   // grados a restar
 
 // ==================== BUFFER DE LOGS ====================
-#define MAX_LOGS 20   // Capacidad interna del buffer
+#define MAX_LOGS 20
 struct LogEntry {
   unsigned long timestamp;
   String level;
@@ -36,7 +36,7 @@ const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashb
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/firmware.bin";
 const char* urlHTML = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/index.html";
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 60001;   // 1 minuto (pruebas), cambiar a 3600000 en producción
+const unsigned long INTERVALO_OTA = 60001;   // 1 minuto (pruebas)
 
 // ==================== PINES ====================
 #define DHTPIN 27
@@ -62,17 +62,14 @@ DNSServer dnsServer;
 
 // ==================== FUNCIÓN addLog ====================
 void addLog(String level, String message) {
-  // Truncar mensajes muy largos
   if (message.length() > 100) message = message.substring(0, 97) + "...";
   logBuffer[logIndex].timestamp = millis();
   logBuffer[logIndex].level = level;
   logBuffer[logIndex].message = message;
   logIndex = (logIndex + 1) % MAX_LOGS;
   if (logCount < MAX_LOGS) logCount++;
-  // Mostrar en monitor serie (excepto los comandos admin repetitivos, que ya filtramos antes)
   Serial.printf("[%s] %s\n", level.c_str(), message.c_str());
   
-  // Publicar el log en MQTT si el cliente está conectado
   if (client.connected()) {
     String logPayload = "{\"timestamp\":" + String(millis()) + ",\"level\":\"" + level + "\",\"message\":\"" + message + "\"}";
     client.publish("fxi/logs", logPayload.c_str());
@@ -88,7 +85,7 @@ const int SERVO_CENTRO = 90;    // Parado
 unsigned long TIEMPO_APUNTAR = 2000;
 unsigned long cronometroRutina = 0;
 const unsigned long WATER_DELAY_MS = 1000;
-int ladoEmergencia = 0; // 0=centro, 1=izquierda, 2=derecha, 3=ambos
+int ladoEmergencia = 0;
 bool emergenciaActiva = false;
 
 // ==================== VARIABLES ====================
@@ -96,7 +93,7 @@ const int UMBRAL_FUEGO = 500;
 const int UMBRAL_GAS = 250;
 const float TEMP_CRITICA = 40.0;
 bool emergenciaEnviada = false;
-float tempGuardada = NAN;        // temperatura real del sensor (sin compensar)
+float tempGuardada = NAN;
 float humGuardada = NAN;
 int rssiGuardado = -99;
 int gasValue = 0;
@@ -106,6 +103,66 @@ unsigned long ultimoTiempoDHT = 0;
 bool simularFuego = false;
 int llamaIzq = 4095;
 int llamaDer = 4095;
+
+// ==================== VARIABLES PARA EL RITMO DEL BUZZER ====================
+// Patrón: 3 pitidos cortos (150ms ON, 150ms OFF) + pausa de 500ms, se repite
+const int BEEPS_PER_CYCLE = 3;
+const unsigned long BEEP_ON_MS = 150;
+const unsigned long BEEP_OFF_MS = 150;
+const unsigned long PAUSE_MS = 500;
+int beepCounter = 0;
+unsigned long lastBuzzerTime = 0;
+bool buzzerState = false;  // false = apagado, true = sonando
+bool inPause = false;
+
+void updateBuzzer() {
+  unsigned long ahora = millis();
+  if (estadoActual == REPOSO) {
+    // No hay emergencia, asegurar que el buzzer esté apagado
+    if (buzzerState) {
+      noTone(PIN_BUZZER);
+      buzzerState = false;
+    }
+    // Resetear el contador para la próxima emergencia
+    beepCounter = 0;
+    inPause = false;
+    lastBuzzerTime = ahora;
+    return;
+  }
+
+  // Gestión del patrón de pitidos
+  if (!inPause) {
+    // Estamos en la secuencia de pitidos (tres beeps)
+    if (!buzzerState) {
+      // Iniciar un pitido
+      tone(PIN_BUZZER, 2000);
+      buzzerState = true;
+      lastBuzzerTime = ahora;
+    } else {
+      // Pitido activo, comprobar si toca apagarlo
+      if (ahora - lastBuzzerTime >= BEEP_ON_MS) {
+        noTone(PIN_BUZZER);
+        buzzerState = false;
+        lastBuzzerTime = ahora;
+        beepCounter++;
+        if (beepCounter >= BEEPS_PER_CYCLE) {
+          // Terminaron los tres pitidos, pasar a pausa
+          inPause = true;
+          beepCounter = 0;
+        }
+      }
+    }
+  } else {
+    // Estamos en la pausa después de los tres pitidos
+    if (!buzzerState) {
+      // Esperar el tiempo de pausa
+      if (ahora - lastBuzzerTime >= PAUSE_MS) {
+        inPause = false;
+        lastBuzzerTime = ahora;
+      }
+    }
+  }
+}
 
 // ==================== CREDENCIALES DINÁMICAS ====================
 const char* DEFAULT_SSID = "NauticaNet";
@@ -303,9 +360,7 @@ void respondAdminCommand(int id, bool success, JsonDocument &data, const String 
   client.publish("fxi/admin/resp", out.c_str());
 }
 
-// ==================== PROCESADOR DE COMANDOS ADMIN (sin logs repetitivos) ====================
 void processAdminCommand(int id, const String &action) {
-  // Los comandos repetitivos (get_stats, get_logs, ping) NO se registran en el monitor serie
   if (action != "get_stats" && action != "get_logs" && action != "ping") {
     addLog("info", "Comando MQTT admin: " + action + " (id=" + String(id) + ")");
   }
@@ -328,7 +383,6 @@ void processAdminCommand(int id, const String &action) {
     respondAdminCommand(id, true, data);
   }
   else if (action == "get_logs") {
-    // Enviar solo los últimos 10 logs para reducir tamaño
     int logsToSend = (logCount < 10) ? logCount : 10;
     DynamicJsonDocument data(4096);
     JsonArray logs = data.createNestedArray("logs");
@@ -420,7 +474,6 @@ void handleRoot() {
 }
 
 void handleEstado() {
-  // Calcular temperatura compensada para mostrar al usuario
   float tempAmbiente = isnan(tempGuardada) ? NAN : (tempGuardada - OFFSET_TEMP);
   String json = "{";
   if (isnan(tempAmbiente)) json += "\"temp\":null,";
@@ -583,7 +636,7 @@ void setup() {
   servoVertical.setPeriodHertz(50); servoVertical.attach(PIN_SERVO_V, 500, 2400);
   servoHorizontal.write(SERVO_CENTRO); servoVertical.write(20);
 
-  // Inicializar LittleFS con formateo automático si falla
+  // LittleFS con formateo automático
   bool littlefsOk = LittleFS.begin(false);
   if (!littlefsOk) {
     addLog("error", "Error al montar LittleFS. Formateando...");
@@ -664,7 +717,7 @@ void setup() {
   }
 }
 
-// ==================== LOOP ====================
+// ==================== LOOP PRINCIPAL ====================
 void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
@@ -719,7 +772,7 @@ void loop() {
     bool fuegoIzq = (llamaIzq < UMBRAL_FUEGO);
     bool fuegoDer = (llamaDer < UMBRAL_FUEGO);
     bool hayGas = (gasValue > UMBRAL_GAS);
-    bool calorCritico = (tempGuardada >= TEMP_CRITICA);   // usa temperatura real del sensor
+    bool calorCritico = (tempGuardada >= TEMP_CRITICA);
     bool simulacion = simularFuego;
 
     int lado = 0;
@@ -748,7 +801,6 @@ void loop() {
     if (lado != 0 || motivo != "") {
       iniciarRutina(lado, motivo);
       if (!emergenciaEnviada) {
-        // En la notificación MQTT se envía la temperatura compensada (para que el usuario vea la estimada)
         float tempEnviar = isnan(tempGuardada) ? NAN : (tempGuardada - OFFSET_TEMP);
         enviarNotificacionMQTT(motivo, tempEnviar, gasValue);
         emergenciaEnviada = true;
@@ -758,12 +810,13 @@ void loop() {
     emergenciaEnviada = false;
   }
 
+  // Control del LED RGB
   if (estadoActual != REPOSO) {
     setColor(255, 0, 0);
-    if ((ahora / 300) % 2 == 0) tone(PIN_BUZZER, 2000);
-    else noTone(PIN_BUZZER);
+    updateBuzzer();   // maneja el patrón de pitidos durante la emergencia
   } else {
     noTone(PIN_BUZZER);
+    buzzerState = false;
     if (!isnan(tempGuardada) && tempGuardada >= 35.0) {
       setColor(255, 0, 0);
     } else {
@@ -776,6 +829,7 @@ void loop() {
     }
   }
 
+  // Máquina de estados para la extinción
   switch (estadoActual) {
     case REPOSO:
       break;
@@ -798,11 +852,11 @@ void loop() {
       break;
   }
 
+  // Publicación MQTT
   if (WiFi.status() == WL_CONNECTED && client.connected()) {
     if (ahora - cronometroDatos > 2000) {
       cronometroDatos = ahora;
       String hStr = isnan(humGuardada) ? "0" : String(humGuardada);
-      // Enviar temperatura compensada por MQTT para que el panel web muestre ambiente
       float tempEnviar = isnan(tempGuardada) ? 0 : (tempGuardada - OFFSET_TEMP);
       String tStr = String(tempEnviar);
       String payload = "{\"temp\":" + tStr + ",\"hum\":" + hStr + ",\"gas\":" + String(gasValue) +
