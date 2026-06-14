@@ -14,6 +14,11 @@
 #include <HTTPUpdate.h>
 #include <ArduinoJson.h>
 
+// ==================== COMPENSACIÓN DE TEMPERATURA ====================
+// Se resta este valor a la lectura del DHT11 para estimar la temperatura ambiente
+// debido al calentamiento interno de los componentes (MQ-2, ESP32, etc.)
+const float OFFSET_TEMP = 5.0;   // grados a restar
+
 // ==================== BUFFER DE LOGS ====================
 #define MAX_LOGS 20   // Capacidad interna del buffer
 struct LogEntry {
@@ -91,7 +96,7 @@ const int UMBRAL_FUEGO = 500;
 const int UMBRAL_GAS = 250;
 const float TEMP_CRITICA = 40.0;
 bool emergenciaEnviada = false;
-float tempGuardada = NAN;
+float tempGuardada = NAN;        // temperatura real del sensor (sin compensar)
 float humGuardada = NAN;
 int rssiGuardado = -99;
 int gasValue = 0;
@@ -415,9 +420,11 @@ void handleRoot() {
 }
 
 void handleEstado() {
+  // Calcular temperatura compensada para mostrar al usuario
+  float tempAmbiente = isnan(tempGuardada) ? NAN : (tempGuardada - OFFSET_TEMP);
   String json = "{";
-  if (isnan(tempGuardada)) json += "\"temp\":null,";
-  else json += "\"temp\":" + String(tempGuardada) + ",";
+  if (isnan(tempAmbiente)) json += "\"temp\":null,";
+  else json += "\"temp\":" + String(tempAmbiente) + ",";
   if (isnan(humGuardada)) json += "\"hum\":null,";
   else json += "\"hum\":" + String(humGuardada) + ",";
   json += "\"gas\":" + String(gasValue) + ",";
@@ -712,7 +719,7 @@ void loop() {
     bool fuegoIzq = (llamaIzq < UMBRAL_FUEGO);
     bool fuegoDer = (llamaDer < UMBRAL_FUEGO);
     bool hayGas = (gasValue > UMBRAL_GAS);
-    bool calorCritico = (tempGuardada >= TEMP_CRITICA);
+    bool calorCritico = (tempGuardada >= TEMP_CRITICA);   // usa temperatura real del sensor
     bool simulacion = simularFuego;
 
     int lado = 0;
@@ -741,7 +748,9 @@ void loop() {
     if (lado != 0 || motivo != "") {
       iniciarRutina(lado, motivo);
       if (!emergenciaEnviada) {
-        enviarNotificacionMQTT(motivo, tempGuardada, gasValue);
+        // En la notificación MQTT se envía la temperatura compensada (para que el usuario vea la estimada)
+        float tempEnviar = isnan(tempGuardada) ? NAN : (tempGuardada - OFFSET_TEMP);
+        enviarNotificacionMQTT(motivo, tempEnviar, gasValue);
         emergenciaEnviada = true;
       }
     }
@@ -793,7 +802,9 @@ void loop() {
     if (ahora - cronometroDatos > 2000) {
       cronometroDatos = ahora;
       String hStr = isnan(humGuardada) ? "0" : String(humGuardada);
-      String tStr = isnan(tempGuardada) ? "0" : String(tempGuardada);
+      // Enviar temperatura compensada por MQTT para que el panel web muestre ambiente
+      float tempEnviar = isnan(tempGuardada) ? 0 : (tempGuardada - OFFSET_TEMP);
+      String tStr = String(tempEnviar);
       String payload = "{\"temp\":" + tStr + ",\"hum\":" + hStr + ",\"gas\":" + String(gasValue) +
                        ",\"llama_izq\":" + String(llamaIzq) + ",\"llama_der\":" + String(llamaDer) + "}";
       client.publish("fxi/datos", payload.c_str());
