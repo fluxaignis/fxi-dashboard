@@ -8,7 +8,7 @@
     <link rel="apple-touch-icon" href="favicon-192x192.png">
     <link rel="manifest" href="manifest.json">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js" defer></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         /* ==================== BASE OPTIMIZADA ==================== */
         :root {
@@ -54,35 +54,51 @@
             box-shadow: 0 0 15px var(--danger-glow), 0 0 30px rgba(255, 61, 0, 0.3);
             border-color: var(--flame-danger);
         }
-        /* ===== MODO PAPA (optimización extrema) ===== */
         body.potato-mode * {
             transition-duration: 0s !important;
             animation-duration: 0s !important;
             animation: none !important;
         }
-        body.potato-mode .glass-card {
-            backdrop-filter: none !important;
-        }
-        body.potato-mode #weather-canvas {
-            display: none !important;
-        }
-        body.potato-mode #trendCard {
-            display: none !important;
-        }
-        body.potato-mode #adminCard {
-            display: none !important;
-        }
-        body.potato-mode .flame-icon.danger {
-            animation: none !important;
-        }
+        body.potato-mode .glass-card { backdrop-filter: none !important; }
+        body.potato-mode #weather-canvas { display: none !important; }
+        body.potato-mode #trendCard,
+        body.potato-mode #adminCard,
+        body.potato-mode #configCard,
+        body.potato-mode #coverageCard,
+        body.potato-mode #downloadBtn,
+        body.potato-mode .range-buttons,
+        body.potato-mode .legend,
+        body.potato-mode .avg-text { display: none !important; }
+        body.potato-mode .flame-icon.danger { animation: none !important; }
+
+        body.watch-mode { padding: 10px; }
+        body.watch-mode .main-content { max-width: 100%; padding: 10px; }
+        body.watch-mode .dashboard-grid { grid-template-columns: 1fr; gap: 10px; }
+        body.watch-mode .left-column, body.watch-mode .right-column { gap: 10px; }
+        body.watch-mode .glass-card { padding: 12px; border-radius: 18px; }
+        body.watch-mode .fxi-logo { font-size: 20px; }
+        body.watch-mode .val-big { font-size: clamp(30px, 10vw, 42px); }
+        body.watch-mode .val-med { font-size: 22px; }
+        body.watch-mode .flame-icon { font-size: 42px; }
+        body.watch-mode .header { margin-bottom: 15px; }
+        body.watch-mode #trendCard,
+        body.watch-mode #levelsCard,
+        body.watch-mode #adminCard,
+        body.watch-mode #configCard,
+        body.watch-mode #coverageCard,
+        body.watch-mode #rssiCard,
+        body.watch-mode #netStatusCard,
+        body.watch-mode #reconnectBtn,
+        body.watch-mode #resetAlertBtnSquare,
+        body.watch-mode #btnServoCard,
+        body.watch-mode #downloadBtn { display: none !important; }
 
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
         ::-webkit-scrollbar-thumb { background: var(--accent-cyan); border-radius: 10px; }
         #weather-canvas {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 0; pointer-events: none;
-            image-rendering: auto;
+            z-index: 0; pointer-events: none; image-rendering: auto;
         }
         .main-content {
             position: relative; z-index: 2;
@@ -100,422 +116,179 @@
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             margin-right: auto;
         }
-        #theme-toggle, #bg-toggle, #potato-toggle {
+        .header-buttons { display: flex; align-items: center; gap: 5px; }
+        .header-buttons > div {
             cursor: pointer; font-size: 26px;
-            transition: transform 0.2s;
-            user-select: none;
-            margin-left: 10px;
+            transition: transform 0.2s; user-select: none; margin-left: 10px;
         }
-        #theme-toggle:hover, #bg-toggle:hover, #potato-toggle:hover { transform: scale(1.2); }
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1.8fr 1.2fr;
-            gap: 25px;
-        }
-        .left-column, .right-column {
-            display: flex;
-            flex-direction: column;
-            gap: 25px;
-        }
+        .header-buttons > div:hover { transform: scale(1.2); }
+
+        .dashboard-grid { display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 25px; }
+        .left-column, .right-column { display: flex; flex-direction: column; gap: 25px; }
         .glass-card {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
-            border-radius: 28px;
-            padding: 22px;
+            border-radius: 28px; padding: 22px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
         }
         .glass-card:hover { transform: translateY(-5px); }
-        @media (max-width: 768px) {
-            .glass-card { backdrop-filter: none; }
-        }
-        @media (min-width: 769px) {
-            .glass-card { backdrop-filter: blur(12px); }
-        }
+        @media (max-width: 768px) { .glass-card { backdrop-filter: none; } }
+        @media (min-width: 769px) { .glass-card { backdrop-filter: blur(12px); } }
         .card-title {
-            font-size: 11px; font-weight: 600;
-            text-transform: uppercase;
-            color: var(--text-sec);
-            margin-bottom: 10px;
-            letter-spacing: 1px;
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            color: var(--text-sec); margin-bottom: 10px; letter-spacing: 1px;
         }
         .val-big { font-size: clamp(38px, 7vw, 58px); font-weight: 200; }
         .val-med { font-size: 28px; font-weight: 500; }
         .unit { font-size: 14px; opacity: 0.7; }
-        .chart-container {
-            height: 110px;
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-around;
-            margin-top: 15px;
-        }
-        .bar-group {
-            width: 50px;
-            text-align: center;
-        }
-        .bar-bg {
-            height: 80px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
-            display: flex;
-            align-items: flex-end;
-            overflow: hidden;
-        }
-        .bar-fill {
-            width: 100%;
-            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-        }
+        .chart-container { height: 110px; display: flex; align-items: flex-end; justify-content: space-around; margin-top: 15px; }
+        .bar-group { width: 50px; text-align: center; }
+        .bar-bg { height: 80px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; align-items: flex-end; overflow: hidden; }
+        .bar-fill { width: 100%; transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
         .btn-glass {
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid var(--accent-cyan);
-            color: var(--accent-cyan);
-            padding: 12px 18px;
-            border-radius: 18px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-            width: 100%;
-            font-size: 14px;
-            box-sizing: border-box;
+            background: rgba(255,255,255,0.05); border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan); padding: 12px 18px; border-radius: 18px;
+            font-weight: 700; cursor: pointer; transition: all 0.3s ease;
+            text-align: center; width: 100%; font-size: 14px; box-sizing: border-box;
         }
         .btn-glass:hover { background: rgba(122,240,212,0.15); transform: translateY(-2px); }
         .btn-servo {
-            background: rgba(255,255,255,0.05);
-            border: 2px solid var(--accent-cyan);
-            color: var(--accent-cyan);
-            padding: 10px 18px;
-            border-radius: 18px;
-            cursor: pointer;
-            width: 100%;
-            transition: all 0.3s;
-            font-weight: 800;
-            user-select: none;
+            background: rgba(255,255,255,0.05); border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan); padding: 10px 18px; border-radius: 18px;
+            cursor: pointer; width: 100%; transition: all 0.3s; font-weight: 800; user-select: none;
         }
-        .btn-servo.active {
-            background: var(--accent-cyan);
-            color: #0B3954;
-            box-shadow: 0 0 20px rgba(122,240,212,0.4);
-        }
+        .btn-servo.active { background: var(--accent-cyan); color: #0B3954; box-shadow: 0 0 20px rgba(122,240,212,0.4); }
         .btn-servo:hover { background: rgba(122,240,212,0.1); transform: translateY(-2px); }
         .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 40px;
-            font-size: 11px;
-            font-weight: bold;
-            color: white;
-            background-color: var(--status-online);
-            margin-left: 8px;
-            text-transform: uppercase;
+            display: inline-block; padding: 4px 12px; border-radius: 40px;
+            font-size: 11px; font-weight: bold; color: white;
+            background-color: var(--status-online); margin-left: 8px; text-transform: uppercase;
         }
         .status-badge.offline { background-color: var(--status-offline); }
         .flame-card { text-align: center; cursor: pointer; }
-        .flame-icon {
-            font-size: 68px;
-            transition: all 0.3s ease;
-            filter: drop-shadow(0 0 5px rgba(0,0,0,0.3));
-        }
+        .flame-icon { font-size: 68px; transition: all 0.3s ease; filter: drop-shadow(0 0 5px rgba(0,0,0,0.3)); }
         .flame-icon.normal { color: var(--flame-normal); text-shadow: 0 0 5px #FFA726; }
-        .flame-icon.danger {
-            color: var(--flame-danger);
-            text-shadow: 0 0 20px #FF3D00;
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.08); }
-            100% { transform: scale(1); }
-        }
+        .flame-icon.danger { color: var(--flame-danger); text-shadow: 0 0 20px #FF3D00; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
         .flame-status { font-size: 18px; font-weight: bold; margin-top: 8px; }
-        .chart-wrapper {
-            margin-top: 15px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 16px;
-            padding: 8px;
-        }
-        .svg-chart {
-            width: 100%;
-            height: 170px;
-            background: transparent;
-        }
-        .range-buttons {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            margin-top: 12px;
-            flex-wrap: wrap;
-        }
+        .chart-wrapper { margin-top: 15px; background: rgba(0,0,0,0.2); border-radius: 16px; padding: 8px; }
+        .svg-chart { width: 100%; height: 170px; background: transparent; }
+        .range-buttons { display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
         .range-btn {
-            background: rgba(255,255,255,0.1);
-            border: 1px solid var(--accent-cyan);
-            color: var(--accent-cyan);
-            padding: 4px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 11px;
-            transition: background 0.2s, color 0.2s;
+            background: rgba(255,255,255,0.1); border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan); padding: 4px 12px; border-radius: 20px;
+            cursor: pointer; font-size: 11px; transition: background 0.2s, color 0.2s;
         }
-        .range-btn.active {
-            background: var(--accent-cyan);
-            color: #0B3954;
-        }
-        .avg-text {
-            font-size: 11px;
-            text-align: center;
-            margin-top: 10px;
-            color: var(--text-sec);
-        }
-        .legend {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin-bottom: 5px;
-            font-size: 11px;
-        }
-        .legend-temp { color: #F06292; }
-        .legend-hum { color: #4FC3F7; }
-        .legend-gas { color: #FFA726; }
-        .double-card-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        .admin-card {
-            transition: all 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1);
-            cursor: pointer;
-            overflow: hidden;
-            height: fit-content;
-        }
-        .admin-card .admin-reduced {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-        }
+        .range-btn.active { background: var(--accent-cyan); color: #0B3954; }
+        .avg-text { font-size: 11px; text-align: center; margin-top: 10px; color: var(--text-sec); }
+        .legend { display: flex; gap: 20px; justify-content: center; margin-bottom: 5px; font-size: 11px; }
+        .legend-temp { color: #F06292; } .legend-hum { color: #4FC3F7; } .legend-gas { color: #FFA726; }
+        .double-card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .admin-card { transition: all 0.4s; cursor: pointer; overflow: hidden; height: fit-content; }
+        .admin-card .admin-reduced { display: flex; align-items: center; justify-content: center; gap: 12px; }
         .admin-card .admin-expanded { display: none; }
         .admin-card.expanded .admin-reduced { display: none; }
         .admin-card.expanded .admin-expanded { display: block; animation: fadeInUp 0.3s ease; }
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .admin-section {
-            background: rgba(0,0,0,0.25);
-            border-radius: 20px;
-            margin-bottom: 18px;
-            overflow: hidden;
-        }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .admin-section { background: rgba(0,0,0,0.25); border-radius: 20px; margin-bottom: 18px; overflow: hidden; }
         .admin-section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            cursor: pointer;
-            background: rgba(255,255,255,0.03);
-            user-select: none;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; cursor: pointer; background: rgba(255,255,255,0.03); user-select: none;
         }
         .admin-section-header:hover { background: rgba(255,255,255,0.08); }
-        .admin-section-title {
-            font-weight: 600;
-            font-size: 13px;
-            color: var(--accent-cyan);
-        }
+        .admin-section-title { font-weight: 600; font-size: 13px; color: var(--accent-cyan); }
         .admin-section-icon { transition: transform 0.3s ease; font-size: 12px; }
-        .admin-section-content {
-            padding: 16px;
-            border-top: 1px solid rgba(255,255,255,0.05);
-            display: none;
-        }
+        .admin-section-content { padding: 16px; border-top: 1px solid rgba(255,255,255,0.05); display: none; }
         .admin-section.open .admin-section-content { display: block; }
         .admin-section.open .admin-section-icon { transform: rotate(90deg); }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 12px;
-        }
-        .stat-card {
-            background: rgba(0,0,0,0.25);
-            border-radius: 16px;
-            padding: 10px;
-            text-align: center;
-        }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+        .stat-card { background: rgba(0,0,0,0.25); border-radius: 16px; padding: 10px; text-align: center; }
         .stat-label { font-size: 9px; text-transform: uppercase; color: var(--text-sec); }
         .stat-value { font-size: 16px; font-weight: bold; margin-top: 4px; word-break: break-word; }
-        .progress-bar {
-            background: rgba(0,0,0,0.4);
-            border-radius: 6px;
-            height: 5px;
-            margin-top: 8px;
-            overflow: hidden;
-        }
+        .progress-bar { background: rgba(0,0,0,0.4); border-radius: 6px; height: 5px; margin-top: 8px; overflow: hidden; }
         .progress-fill { background: var(--accent-cyan); height: 100%; width: 0%; }
-        .stacked-bar {
-            background: rgba(0,0,0,0.4);
-            border-radius: 6px;
-            height: 7px;
-            margin-top: 8px;
-            display: flex;
-            overflow: hidden;
-        }
+        .stacked-bar { background: rgba(0,0,0,0.4); border-radius: 6px; height: 7px; margin-top: 8px; display: flex; overflow: hidden; }
         .segment-firmware { background-color: var(--color-firmware); }
         .segment-littlefs { background-color: var(--color-littlefs); }
         .segment-free { background-color: var(--color-free); }
-        .action-blocks {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-            gap: 12px;
-        }
+        .action-blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
         .action-block {
-            background: rgba(0,0,0,0.3);
-            border-radius: 20px;
-            padding: 10px 6px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 1px solid rgba(122,240,212,0.2);
+            background: rgba(0,0,0,0.3); border-radius: 20px; padding: 10px 6px;
+            text-align: center; cursor: pointer; transition: all 0.2s; border: 1px solid rgba(122,240,212,0.2);
         }
-        .action-block:hover {
-            background: rgba(122,240,212,0.15);
-            transform: translateY(-3px);
-            border-color: var(--accent-cyan);
-        }
+        .action-block:hover { background: rgba(122,240,212,0.15); transform: translateY(-3px); border-color: var(--accent-cyan); }
         .action-icon { font-size: 22px; display: block; margin-bottom: 4px; }
         .action-label { font-size: 11px; }
-        .ping-graph {
-            background: rgba(0,0,0,0.3);
-            border-radius: 14px;
-            padding: 8px;
-            height: 90px;
-        }
+        .ping-graph { background: rgba(0,0,0,0.3); border-radius: 14px; padding: 8px; height: 90px; }
         #pingCanvas { width: 100%; height: 70px; background: rgba(0,0,0,0.2); border-radius: 12px; }
         .log-container {
-            background: rgba(0,0,0,0.4);
-            border-radius: 16px;
-            padding: 8px;
-            max-height: 250px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 11px;
+            background: rgba(0,0,0,0.4); border-radius: 16px; padding: 8px;
+            max-height: 250px; overflow-y: auto; font-family: monospace; font-size: 11px;
         }
-        .log-entry {
-            margin: 4px 0;
-            padding: 4px 8px;
-            border-radius: 8px;
-            background: rgba(0,0,0,0.2);
-            border-left: 3px solid;
-            cursor: help;
-        }
-        .log-info { border-left-color: #4FC3F7; }
-        .log-warn { border-left-color: #FFD54F; color: #FFD54F; }
-        .log-error { border-left-color: #F06292; color: #F06292; }
-        .log-alert { border-left-color: #FF3D00; color: #FF3D00; }
+        .log-entry { margin: 4px 0; padding: 4px 8px; border-radius: 8px; background: rgba(0,0,0,0.2); border-left: 3px solid; cursor: help; }
+        .log-info { border-left-color: #4FC3F7; } .log-warn { border-left-color: #FFD54F; color: #FFD54F; }
+        .log-error { border-left-color: #F06292; color: #F06292; } .log-alert { border-left-color: #FF3D00; color: #FF3D00; }
         .log-timestamp { display: none; color: var(--text-sec); font-size: 9px; margin-right: 8px; }
         .log-timestamp.visible { display: inline; }
-        .toggle-timestamp {
-            background: none;
-            border: none;
-            color: var(--accent-cyan);
-            cursor: pointer;
-            font-size: 10px;
-            margin-bottom: 8px;
-            text-decoration: underline;
-        }
+        .toggle-timestamp { background: none; border: none; color: var(--accent-cyan); cursor: pointer; font-size: 10px; margin-bottom: 8px; text-decoration: underline; }
         .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); z-index: 1000;
+            align-items: center; justify-content: center;
         }
         .modal-content {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 28px;
-            padding: 24px;
-            max-width: 360px;
-            width: 85%;
-            backdrop-filter: blur(20px);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 28px;
+            padding: 24px; max-width: 360px; width: 85%; backdrop-filter: blur(20px); box-shadow: 0 20px 40px rgba(0,0,0,0.3);
         }
         .modal-content h3 { margin-top: 0; color: var(--accent-cyan); }
         .modal-content input {
-            width: 100%;
-            padding: 12px;
-            margin: 12px 0;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--accent-cyan);
-            border-radius: 28px;
-            color: var(--text-main);
-            font-size: 14px;
-            outline: none;
-            box-sizing: border-box;
+            width: 100%; padding: 12px; margin: 12px 0;
+            background: rgba(0,0,0,0.5); border: 1px solid var(--accent-cyan); border-radius: 28px;
+            color: var(--text-main); font-size: 14px; outline: none; box-sizing: border-box;
         }
-        .modal-content input:focus {
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 8px var(--accent-cyan);
-        }
-        .modal-buttons {
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-        }
-        .modal-buttons button {
-            padding: 8px 20px;
-            border-radius: 40px;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-        }
+        .modal-content input:focus { border-color: var(--accent-blue); box-shadow: 0 0 8px var(--accent-cyan); }
+        .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; }
+        .modal-buttons button { padding: 8px 20px; border-radius: 40px; border: none; cursor: pointer; font-weight: bold; }
         .modal-buttons button:first-child { background: var(--accent-cyan); color: #0B3954; }
         .modal-buttons button:last-child { background: var(--chart-pink); color: white; }
         .toast {
-            position: fixed;
-            bottom: 25px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--accent-cyan);
-            color: var(--accent-cyan);
-            padding: 10px 22px;
-            border-radius: 40px;
-            font-weight: bold;
-            z-index: 1100;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
-            white-space: nowrap;
-            font-size: 13px;
+            position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%);
+            background: var(--glass-bg); backdrop-filter: blur(12px);
+            border: 1px solid var(--accent-cyan); color: var(--accent-cyan);
+            padding: 10px 22px; border-radius: 40px; font-weight: bold;
+            z-index: 1100; opacity: 0; transition: opacity 0.3s;
+            pointer-events: none; white-space: nowrap; font-size: 13px;
         }
         .toast.show { opacity: 1; }
-        @media (max-width: 850px) {
-            .dashboard-grid { grid-template-columns: 1fr; }
-            .double-card-row { grid-template-columns: 1fr; gap: 20px; }
-        }
+        @media (max-width: 850px) { .dashboard-grid { grid-template-columns: 1fr; } .double-card-row { grid-template-columns: 1fr; gap: 20px; } }
         @media (max-width: 500px) {
             .header { flex-direction: column; align-items: flex-start; }
-            #theme-toggle { margin-left: 0; }
+            .header-buttons { margin-left: 0; }
             .double-card-row { gap: 15px; }
         }
         @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.001ms !important;
-                transition-duration: 0.001ms !important;
-            }
+            *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
         }
-        .header-buttons {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            margin-left: auto;
+
+        .config-input {
+            background: rgba(0,0,0,0.3); border: 1px solid var(--accent-cyan); border-radius: 12px;
+            color: var(--text-main); padding: 6px 10px; width: 80px; font-size: 13px; text-align: center;
         }
+        .config-label { font-size: 12px; margin-right: 8px; }
+        .config-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+
+        #coverageSVG { width: 200px; height: 200px; display: block; margin: 0 auto; }
+        .sweep-active { animation: radarSweep 2s linear infinite; }
+        @keyframes radarSweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .pump-active { animation: pumpPulse 0.8s ease-in-out infinite; }
+        @keyframes pumpPulse {
+            0%   { transform: rotate(var(--servo-rotation, 0deg)) scale(1); }
+            50%  { transform: rotate(var(--servo-rotation, 0deg)) scale(1.05); }
+            100% { transform: rotate(var(--servo-rotation, 0deg)) scale(1); }
+        }
+        .sector-fire { fill: rgba(255, 61, 0, 0.8) !important; animation: fireGlow 0.5s infinite alternate; }
+        @keyframes fireGlow { from { fill: rgba(255, 61, 0, 0.7); } to { fill: rgba(255, 160, 0, 0.9); } }
     </style>
 </head>
 <body>
@@ -531,6 +304,7 @@
                 <div style="font-size: 11px; color: var(--text-sec);" id="modo-indicador">Modo: --</div>
             </div>
             <div class="header-buttons">
+                <div id="watch-toggle" title="Modo Reloj (wearable)">⌚</div>
                 <div id="potato-toggle" title="Modo Papa (extrema optimización)">🥔</div>
                 <div id="bg-toggle" title="Desactivar fondo animado">✨</div>
                 <div id="theme-toggle" title="Cambiar tema">✳</div>
@@ -538,7 +312,6 @@
         </div>
 
         <div class="dashboard-grid">
-            <!-- COLUMNA IZQUIERDA -->
             <div class="left-column">
                 <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
@@ -548,7 +321,6 @@
                     </div>
                     <div style="font-size: 55px;">🌡️</div>
                 </div>
-
                 <div class="double-card-row">
                     <div class="glass-card">
                         <div class="card-title">💧 Humedad</div>
@@ -559,11 +331,34 @@
                         <div class="val-med" id="gas-val">--<span class="unit">ppm</span></div>
                     </div>
                 </div>
-
-                <div class="glass-card flame-card">
+                <div class="glass-card flame-card" id="flameCard">
                     <div class="flame-icon normal" id="flameIcon">🔥</div>
                     <div class="flame-status" id="flameStatus">Estado: Normal</div>
                     <div style="font-size: 11px; opacity: 0.7;">Detección óptica de incendios</div>
+                </div>
+
+                <div class="glass-card" id="coverageCard">
+                    <div class="card-title">📡 Campo de visión (KY‑026 ×2)</div>
+                    <svg id="coverageSVG" viewBox="-120 -120 240 240">
+                        <circle cx="0" cy="0" r="110" fill="none" stroke="var(--glass-border)" stroke-width="2"/>
+                        <g id="rotatingGroup" style="transform-origin: 0px 0px; transition: transform 0.1s linear;">
+                            <path id="sector1" d="M 0 0 L -55 -95 A 110 110 0 0 1 55 -95 Z"
+                                  fill="rgba(122,240,212,0.25)" stroke="var(--accent-cyan)" stroke-width="1.5"
+                                  style="transition: fill 0.2s;"/>
+                            <path id="sector2" d="M 0 0 L 55 95 A 110 110 0 0 1 -55 95 Z"
+                                  fill="rgba(122,240,212,0.25)" stroke="var(--accent-cyan)" stroke-width="1.5"
+                                  style="transition: fill 0.2s;"/>
+                            <line id="sweepLine" x1="0" y1="0" x2="0" y2="-110" stroke="var(--accent-cyan)" stroke-width="2"
+                                  stroke-dasharray="4 4" style="transform-origin: 0px 0px;"/>
+                            <circle cx="0" cy="0" r="6" fill="var(--text-main)"/>
+                        </g>
+                        <text id="bombaIcon" x="0" y="35" text-anchor="middle" font-size="28" fill="#4FC3F7" opacity="0">💧</text>
+                    </svg>
+                    <div style="display: flex; justify-content: space-around; margin-top: 8px; font-size: 11px;">
+                        <span>Sensor 1: <span id="flama1Status">Normal</span></span>
+                        <span>Sensor 2: <span id="flama2Status">Normal</span></span>
+                        <span>Bomba: <span id="bombaStatus">OFF</span></span>
+                    </div>
                 </div>
 
                 <div class="glass-card" id="levelsCard">
@@ -575,7 +370,6 @@
                     </div>
                 </div>
 
-                <!-- Tarjeta de tendencias (se oculta en modo papa) -->
                 <div class="glass-card" id="trendCard">
                     <div class="card-title">Tendencias (Temp / Hum / Gas)</div>
                     <div class="legend">
@@ -603,23 +397,23 @@
                         <button class="range-btn" data-points="50">50</button>
                     </div>
                     <div class="avg-text" id="avgText">Promedio: --</div>
+                    <button id="downloadBtn" class="btn-glass" style="margin-top: 12px;">📥 Descargar CSV</button>
                 </div>
             </div>
 
-            <!-- COLUMNA DERECHA -->
             <div class="right-column">
                 <div class="double-card-row">
-                    <div class="glass-card">
+                    <div class="glass-card" id="netStatusCard">
                         <div class="card-title">🌐 Estado Red</div>
                         <div id="net-status" style="color: var(--accent-cyan);">--</div>
                     </div>
-                    <div class="glass-card">
+                    <div class="glass-card" id="rssiCard">
                         <div class="card-title">📡 Señal RSSI</div>
                         <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
                     </div>
                 </div>
 
-                <div class="glass-card">
+                <div class="glass-card" id="btnServoCard">
                     <div class="card-title">🔄 Barrido de Radar</div>
                     <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
                 </div>
@@ -627,12 +421,23 @@
                 <div class="glass-card" style="cursor: pointer;" id="reconnectBtn">
                     <div class="btn-glass">🔄 Reconectar Sistema</div>
                 </div>
-
                 <div class="glass-card" style="cursor: pointer;" id="resetAlertBtnSquare">
                     <div class="btn-glass">🔄 Resetear Alerta</div>
                 </div>
 
-                <!-- Panel de administración (se oculta en modo papa) -->
+                <div class="glass-card" id="configCard">
+                    <div class="card-title">⚙️ Configuración de Umbrales</div>
+                    <div class="config-row">
+                        <span class="config-label">🌡️ Peligro temp (°C):</span>
+                        <input type="number" id="thresholdDangerTemp" class="config-input" value="40" step="0.5">
+                    </div>
+                    <div class="config-row">
+                        <span class="config-label">🔥 Desactivar fuego MQTT (°C):</span>
+                        <input type="number" id="thresholdFireMqtt" class="config-input" value="35" step="0.5">
+                    </div>
+                    <button id="saveThresholdsBtn" class="btn-glass" style="margin-top: 10px;">💾 Guardar Umbrales</button>
+                </div>
+
                 <div class="glass-card admin-card" id="adminCard">
                     <div class="admin-reduced">
                         <span>🔐</span><span class="admin-title">Panel de Administración</span><span>🔒</span>
@@ -646,26 +451,26 @@
                             <button id="forceHttpBtn" class="range-btn" style="background: var(--chart-pink); color:white;">Forzar HTTP</button>
                             <button id="forceMqttBtn" class="range-btn" style="background: var(--accent-cyan);">Volver a MQTT</button>
                         </div>
-                        <div class="admin-section open" data-section="stats">
+                        <div class="admin-section open">
                             <div class="admin-section-header"><span class="admin-section-title">📊 Estadísticas del Sistema</span><span class="admin-section-icon">▶</span></div>
                             <div class="admin-section-content"><div class="stats-grid" id="statsGrid">Cargando...</div></div>
                         </div>
-                        <div class="admin-section open" data-section="actions">
+                        <div class="admin-section open">
                             <div class="admin-section-header"><span class="admin-section-title">⚡ Acciones Rápidas</span><span class="admin-section-icon">▶</span></div>
                             <div class="admin-section-content"><div class="action-blocks" id="actionBlocks"></div></div>
                         </div>
-                        <div class="admin-section open" data-section="perf">
+                        <div class="admin-section open">
                             <div class="admin-section-header"><span class="admin-section-title">📈 Rendimiento</span><span class="admin-section-icon">▶</span></div>
                             <div class="admin-section-content">
                                 <div class="ping-graph"><canvas id="pingCanvas" width="400" height="70"></canvas></div>
                                 <div style="text-align: center; margin-top: 6px; font-size: 10px;">Promedio: <span id="avgPing">--</span> ms</div>
                             </div>
                         </div>
-                        <div class="admin-section open" data-section="update">
+                        <div class="admin-section open">
                             <div class="admin-section-header"><span class="admin-section-title">🔄 Actualización OTA</span><span class="admin-section-icon">▶</span></div>
                             <div class="admin-section-content"><div class="action-blocks" id="updateBlocks"></div></div>
                         </div>
-                        <div class="admin-section open" data-section="logs">
+                        <div class="admin-section open">
                             <div class="admin-section-header"><span class="admin-section-title">📋 Logs del Sistema</span><span class="admin-section-icon">▶</span></div>
                             <div class="admin-section-content">
                                 <button id="toggleTimestampBtn" class="toggle-timestamp">Mostrar timestamps</button>
@@ -695,7 +500,11 @@
 
     <script>
         (function() {
-            /* ===================== CACHÉ DE DOM ===================== */
+            if (typeof mqtt === 'undefined') {
+                document.getElementById('esp-status').innerText = 'Error: MQTT no cargada';
+                return;
+            }
+
             const dom = {
                 toast: document.getElementById('toast'),
                 modal: document.getElementById('modal'),
@@ -740,17 +549,60 @@
                 themeToggle: document.getElementById('theme-toggle'),
                 bgToggle: document.getElementById('bg-toggle'),
                 potatoToggle: document.getElementById('potato-toggle'),
+                watchToggle: document.getElementById('watch-toggle'),
                 canvasBg: document.getElementById('weather-canvas'),
-                rangeButtons: document.getElementById('rangeButtons')
+                rangeButtons: document.getElementById('rangeButtons'),
+                downloadBtn: document.getElementById('downloadBtn'),
+                sweepLine: document.getElementById('sweepLine'),
+                rotatingGroup: document.getElementById('rotatingGroup'),
+                sector1: document.getElementById('sector1'),
+                sector2: document.getElementById('sector2'),
+                bombaIcon: document.getElementById('bombaIcon'),
+                flama1Status: document.getElementById('flama1Status'),
+                flama2Status: document.getElementById('flama2Status'),
+                bombaStatus: document.getElementById('bombaStatus'),
+                thresholdDangerTemp: document.getElementById('thresholdDangerTemp'),
+                thresholdFireMqtt: document.getElementById('thresholdFireMqtt'),
+                saveThresholdsBtn: document.getElementById('saveThresholdsBtn')
             };
             const ctxBg = dom.canvasBg.getContext('2d');
 
-            /* ========== CONSTANTES ========== */
             const adminPassword = "asdlkj24092009";
-            const UMBRAL_DESACTIVACION_CRITICA = 38.0;
-            const UMBRAL_DESACTIVACION_FUEGO = 35.0;
+            let UMBRAL_DESACTIVACION_CRITICA = parseFloat(localStorage.getItem('umbralCritica')) || 38.0;
+            let UMBRAL_DESACTIVACION_FUEGO = parseFloat(localStorage.getItem('umbralFuego')) || 35.0;
+            let dangerTempThreshold = parseFloat(localStorage.getItem('dangerTemp')) || 40.0;
+            dom.thresholdDangerTemp.value = dangerTempThreshold;
+            dom.thresholdFireMqtt.value = UMBRAL_DESACTIVACION_FUEGO;
 
-            /* ========== ESTADO GLOBAL ========== */
+            const UMBRAL_LLAMA = 500;
+            const UMBRAL_GAS_HTTP = 250;
+
+            let audioCtx = null, alarmOsc = null, alarmGain = null;
+            function startAlarm() {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (alarmOsc) return;
+                alarmOsc = audioCtx.createOscillator();
+                alarmGain = audioCtx.createGain();
+                alarmOsc.type = 'sawtooth';
+                alarmOsc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                alarmGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                alarmOsc.connect(alarmGain); alarmGain.connect(audioCtx.destination);
+                alarmOsc.start();
+                let up = true;
+                alarmOsc.interval = setInterval(() => {
+                    if (!alarmOsc) return;
+                    alarmOsc.frequency.linearRampToValueAtTime(up ? 1200 : 800, audioCtx.currentTime + 0.1);
+                    up = !up;
+                }, 400);
+            }
+            function stopAlarm() {
+                if (alarmOsc) {
+                    clearInterval(alarmOsc.interval);
+                    alarmOsc.stop(); alarmOsc.disconnect();
+                    alarmOsc = null; alarmGain = null;
+                }
+            }
+
             let isDarkMode = true;
             let dangerMode = false;
             let emergenciaActivaMQTT = false;
@@ -771,15 +623,15 @@
             let particles = [];
             let animationId = null;
             let bgEnabled = true;
-            let potatoMode = false;
-            let previousBgEnabled = true;
-            let lastSvgDrawTime = 0;
-            const SVG_THROTTLE = 500;
+            let potatoMode = false, previousBgEnabled = true;
+            let lastSvgDrawTime = 0, SVG_THROTTLE = 500;
             let lastPotatoDataUpdate = 0;
+            let watchMode = false;
 
-            /* ========== TOAST / MODAL ========== */
+            let servoAngle = 90, flama1Active = false, flama2Active = false, bombaActive = false;
+
             function showToast(msg, isError = false) {
-                if (potatoMode && !isError) return; // en modo papa solo errores
+                if (potatoMode && !isError) return;
                 dom.toast.textContent = msg;
                 dom.toast.style.color = isError ? '#F06292' : 'var(--accent-cyan)';
                 dom.toast.style.borderColor = isError ? '#F06292' : 'var(--accent-cyan)';
@@ -804,7 +656,6 @@
             dom.modalCancel.onclick = () => closeModal(null);
             dom.modalInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') closeModal(dom.modalInput.value); });
 
-            /* ========== FUNCIONES HTTP ========== */
             async function httpGetJson(url) {
                 const res = await fetch(url);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -814,16 +665,34 @@
                 const res = await fetch(`/cmd?action=${cmd}`);
                 return await res.text();
             }
-            async function httpGetEstado() {
-                const data = await httpGetJson('/estado');
-                actualizarTemperatura(data.temp);
-                actualizarHumedad(data.hum);
-                actualizarRSSI(data.rssi);
-                actualizarGas(data.gas);
-                addDataPoint(data.temp, data.hum, data.gas);
+
+            function evaluateSensorData(data) {
+                if (emergenciaActivaMQTT) return; // MQTT emergency takes precedence
+                const llamaIzq = parseInt(data.llama_izq);
+                const llamaDer = parseInt(data.llama_der);
+                const gasVal = parseInt(data.gas);
+
+                if (!isNaN(llamaIzq) && llamaIzq < UMBRAL_LLAMA) {
+                    setDangerMode(true, "FUEGO IZQUIERDO (KY-026)");
+                } else if (!isNaN(llamaDer) && llamaDer < UMBRAL_LLAMA) {
+                    setDangerMode(true, "FUEGO DERECHO (KY-026)");
+                } else if (!isNaN(gasVal) && gasVal > UMBRAL_GAS_HTTP) {
+                    setDangerMode(true, "GAS COMBUSTIBLE DETECTADO (MQ-2)");
+                }
             }
 
-            /* ========== MQTT ADMIN ========== */
+            async function httpGetEstado() {
+                try {
+                    const data = await httpGetJson('/estado');
+                    actualizarTemperatura(data.temp);
+                    actualizarHumedad(data.hum);
+                    actualizarRSSI(data.rssi);
+                    actualizarGas(data.gas);
+                    addDataPoint(data.temp, data.hum, data.gas);
+                    if (currentMode === 'http') evaluateSensorData(data);
+                } catch(e) { console.warn('HTTP poll error', e); }
+            }
+
             function sendAdminCommand(action, payload = {}) {
                 return new Promise((resolve, reject) => {
                     if (!mqttClient || !mqttConnected) reject(new Error("MQTT no conectado"));
@@ -833,7 +702,7 @@
                     const message = JSON.stringify(payload);
                     const timeout = setTimeout(() => {
                         pendingRequests.delete(id);
-                        reject(new Error(`Timeout para comando ${action} (id=${id})`));
+                        reject(new Error(`Timeout comando ${action}`));
                     }, 10000);
                     pendingRequests.set(id, { resolve, reject, timeout });
                     mqttClient.publish('fxi/admin/cmd', message);
@@ -841,19 +710,16 @@
             }
             function handleAdminResponse(topic, payload) {
                 try {
-                    const msg = payload.toString();
-                    const data = JSON.parse(msg);
-                    const id = data.id;
-                    const entry = pendingRequests.get(id);
+                    const data = JSON.parse(payload.toString());
+                    const entry = pendingRequests.get(data.id);
                     if (!entry) return;
                     clearTimeout(entry.timeout);
-                    pendingRequests.delete(id);
+                    pendingRequests.delete(data.id);
                     if (data.success) entry.resolve(data.data || {});
-                    else entry.reject(new Error(data.error || "Error desconocido"));
+                    else entry.reject(new Error(data.error || "Error"));
                 } catch(e) {}
             }
 
-            /* ========== UI COMUNES ========== */
             function setDangerMode(active, motivo = "") {
                 if (active === dangerMode) return;
                 dangerMode = active;
@@ -861,9 +727,10 @@
                     document.body.classList.add('danger-alert');
                     dom.flameIcon.classList.add('danger');
                     dom.flameIcon.classList.remove('normal');
-                    dom.flameStatus.innerHTML = `⚠️ ¡PELIGRO! ${motivo || "Incendio detectado"}`;
+                    dom.flameStatus.innerHTML = `⚠️ ¡PELIGRO! ${motivo}`;
                     dom.flameStatus.style.color = '#FF3D00';
                     addSystemLog(`🚨 ALERTA: ${motivo}`, 'alert');
+                    startAlarm();
                 } else {
                     document.body.classList.remove('danger-alert');
                     dom.flameIcon.classList.remove('danger');
@@ -871,37 +738,31 @@
                     dom.flameStatus.innerHTML = 'Estado: Normal';
                     dom.flameStatus.style.color = '';
                     addSystemLog(`✅ Alerta desactivada.`, 'info');
+                    stopAlarm();
                 }
             }
             function resetAlertaForzado() {
                 emergenciaActivaMQTT = false;
                 setDangerMode(false, "");
-                if (simulationActive && mqttClient && mqttConnected) {
+                if (simulationActive && mqttConnected) {
                     mqttClient.publish('fxi/simular', 'FUEGO_OFF');
                     simulationActive = false;
                 }
-                dom.netStatus.innerText = "Alerta reiniciada manualmente";
+                dom.netStatus.innerText = "Alerta reiniciada";
                 showToast("Alerta reseteada");
-                setTimeout(() => {
-                    if (!dangerMode) {
-                        dom.netStatus.innerText = currentMode === 'mqtt' ? "MQTT: Conectado" : "HTTP: Conectado";
-                    } else dom.netStatus.innerText = "Modo peligro activo";
-                }, 2000);
             }
             function addSystemLog(message, level = 'info') {
-                if (potatoMode || !dom.liveLogs) return; // en modo papa no se actualiza
-                const timestamp = new Date().toLocaleTimeString();
+                if (potatoMode || !dom.liveLogs) return;
                 const entry = document.createElement('div');
                 entry.className = `log-entry log-${level}`;
-                entry.setAttribute('title', timestamp);
-                entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${timestamp}]</span> ${message}`;
+                entry.title = new Date().toLocaleTimeString();
+                entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${entry.title}]</span> ${message}`;
                 dom.liveLogs.prepend(entry);
                 while (dom.liveLogs.children.length > 120) dom.liveLogs.removeChild(dom.liveLogs.lastChild);
             }
 
-            /* ========== GRÁFICO SVG (con throttle y respeto a modo papa) ========== */
             function drawSVGNow() {
-                if (potatoMode) return; // no dibujar tendencias en modo papa
+                if (potatoMode || watchMode) return;
                 const pointsCount = Math.min(tempHistory.length, currentPoints);
                 if (pointsCount < 2) return;
                 const temps = tempHistory.slice(-pointsCount);
@@ -914,9 +775,7 @@
                 maxTemp += (maxTemp - minTemp) * pad; minTemp -= (maxTemp - minTemp) * pad;
                 maxHum += (maxHum - minHum) * pad; minHum -= (maxHum - minHum) * pad;
                 maxGas += (maxGas - minGas) * pad; minGas -= (maxGas - minGas) * pad;
-                if (minTemp < 0) minTemp = 0;
-                if (minHum < 0) minHum = 0;
-                if (minGas < 0) minGas = 0;
+                if (minTemp < 0) minTemp = 0; if (minHum < 0) minHum = 0; if (minGas < 0) minGas = 0;
                 const graphLeft = 40, graphRight = 560, graphWidth = graphRight - graphLeft;
                 const graphTop = 15, graphBottom = 145, graphHeight = graphBottom - graphTop;
                 const stepX = graphWidth / (pointsCount - 1);
@@ -936,7 +795,7 @@
                 dom.avgText.innerHTML = `📊 Promedio (últimos ${currentPoints}): Temp ${avgTemp}°C / Hum ${avgHum}% / Gas ${avgGas}ppm`;
             }
             function throttledSVGUpdate() {
-                if (potatoMode) return;
+                if (potatoMode || watchMode) return;
                 const now = performance.now();
                 if (now - lastSvgDrawTime < SVG_THROTTLE) return;
                 lastSvgDrawTime = now;
@@ -950,7 +809,6 @@
                 throttledSVGUpdate();
             }
 
-            /* ========== ACTUALIZACIÓN DE VALORES ========== */
             function actualizarTemperatura(temp) {
                 const tempVal = parseFloat(temp);
                 if (isNaN(tempVal)) return;
@@ -959,21 +817,19 @@
                 let desc = '';
                 if (tempVal < 20) desc = 'Ambiente fresco';
                 else if (tempVal < 30) desc = 'Temperatura normal';
-                else if (tempVal < 40) desc = 'Calor elevado';
+                else if (tempVal < dangerTempThreshold) desc = 'Calor elevado';
                 else desc = '¡PELIGRO! Calor extremo';
                 dom.descVal.innerText = desc;
-
                 if (dangerMode) {
                     if (emergenciaActivaMQTT) {
-                        if (tempVal < UMBRAL_DESACTIVACION_FUEGO) {
-                            setDangerMode(false, "");
-                            emergenciaActivaMQTT = false;
-                        }
+                        if (tempVal < UMBRAL_DESACTIVACION_FUEGO) { setDangerMode(false, ""); emergenciaActivaMQTT = false; }
                     } else {
                         if (tempVal < UMBRAL_DESACTIVACION_CRITICA) setDangerMode(false, "");
                     }
                 }
-                if (!dangerMode && tempVal >= 40.0 && !emergenciaActivaMQTT) setDangerMode(true, "Temperatura crítica > 40°C");
+                if (!dangerMode && tempVal >= dangerTempThreshold && !emergenciaActivaMQTT) {
+                    setDangerMode(true, "Temperatura crítica > " + dangerTempThreshold + "°C");
+                }
             }
             function actualizarHumedad(hum) {
                 const humVal = parseFloat(hum);
@@ -982,9 +838,11 @@
                 dom.barHum.style.height = Math.min(100, humVal) + '%';
             }
             function actualizarRSSI(rssi) {
-                dom.rssiVal.innerHTML = `${rssi}<span class="unit">dBm</span>`;
-                if (rssi > -60) dom.rssiVal.style.color = '#81C784';
-                else if (rssi > -75) dom.rssiVal.style.color = '#FFD54F';
+                const rssiVal = parseInt(rssi);
+                if (isNaN(rssiVal)) return;
+                dom.rssiVal.innerHTML = `${rssiVal}<span class="unit">dBm</span>`;
+                if (rssiVal > -60) dom.rssiVal.style.color = '#81C784';
+                else if (rssiVal > -75) dom.rssiVal.style.color = '#FFD54F';
                 else dom.rssiVal.style.color = '#F06292';
             }
             function actualizarGas(gas) {
@@ -994,43 +852,247 @@
                 dom.barGas.style.height = Math.min(100, gasVal / 20) + '%';
             }
 
-            function formatUptime(seconds) {
-                let d = Math.floor(seconds / 86400);
-                let h = Math.floor((seconds % 86400) / 3600);
-                let m = Math.floor((seconds % 3600) / 60);
-                let s = seconds % 60;
-                return `${d}d ${h}h ${m}m ${s}s`;
+            function updateServoAngle(angle) {
+                servoAngle = angle;
+                const rotation = angle - 90;
+                dom.rotatingGroup.style.setProperty('--servo-rotation', rotation + 'deg');
+                if (!bombaActive) {
+                    dom.rotatingGroup.style.transform = `rotate(${rotation}deg)`;
+                }
+            }
+            function actualizarFlama(sensorNum, active) {
+                if (sensorNum === 1) {
+                    flama1Active = active;
+                    dom.sector1.classList.toggle('sector-fire', active);
+                    dom.flama1Status.textContent = active ? '🔥 FUEGO' : 'Normal';
+                } else {
+                    flama2Active = active;
+                    dom.sector2.classList.toggle('sector-fire', active);
+                    dom.flama2Status.textContent = active ? '🔥 FUEGO' : 'Normal';
+                }
+            }
+            function actualizarBomba(active) {
+                bombaActive = active;
+                dom.bombaStatus.textContent = active ? 'ON' : 'OFF';
+                dom.bombaIcon.style.opacity = active ? '1' : '0';
+                if (active) {
+                    dom.rotatingGroup.classList.add('pump-active');
+                } else {
+                    dom.rotatingGroup.classList.remove('pump-active');
+                    const rotation = servoAngle - 90;
+                    dom.rotatingGroup.style.transform = `rotate(${rotation}deg)`;
+                }
             }
 
-            /* ========== ADMIN UI ========== */
-            async function updateStatsUI() {
-                if (!adminAuthenticated || potatoMode) return;
-                try {
-                    let stats;
-                    if (currentMode === 'mqtt') stats = await sendAdminCommand('get_stats');
-                    else stats = await httpGetJson('/info');
-                    const sketchPercent = stats.sketch_percent || 45;
-                    const littlefsPercent = stats.littlefs_percent || 23;
-                    const freePercent = 100 - (sketchPercent + littlefsPercent);
-                    const heapPercent = stats.heap_percent || 0;
-                    const uptime = stats.uptime || 0;
-                    const usedKB = ((sketchPercent * 1992) / 100) + ((littlefsPercent * 128) / 100);
-                    const totalKB = 1992 + 128;
-                    const mdnsHost = stats.mdns || 'fluxaignis_ota.local';
-                    dom.statsGrid.innerHTML = `
-                        <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${stats.firmware || '--'}</div></div>
-                        <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(uptime)}</div></div>
-                        <div class="stat-card"><div class="stat-label">RAM (Heap)</div><div class="stat-value">${heapPercent}%</div><div class="progress-bar"><div class="progress-fill" style="width: ${heapPercent}%"></div></div></div>
-                        <div class="stat-card"><div class="stat-label">Flash usado</div><div class="stat-value">${Math.round(usedKB)} KB / ${totalKB} KB (${Math.round(sketchPercent+littlefsPercent)}%)</div><div class="stacked-bar"><div class="segment-firmware" style="width: ${sketchPercent}%;"></div><div class="segment-littlefs" style="width: ${littlefsPercent}%;"></div><div class="segment-free" style="width: ${freePercent}%;"></div></div></div>
-                        <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${stats.ip_ap || '--'}</div></div>
-                        <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${stats.ip_sta || '--'}</div></div>
-                        <div class="stat-card"><div class="stat-label">MQTT broker</div><div class="stat-value">${stats.mqtt_status || '--'}</div></div>
-                        <div class="stat-card"><div class="stat-label">mDNS</div><div class="stat-value">${mdnsHost}</div></div>
-                    `;
-                } catch(e) { dom.statsGrid.innerHTML = `<div class="stat-card">Error</div>`; }
+            function downloadCSV() {
+                if (tempHistory.length === 0) { showToast("No hay datos", true); return; }
+                let csv = "timestamp,temperatura,humedad,gas\n";
+                const now = Date.now(), interval = 2000;
+                for (let i = 0; i < tempHistory.length; i++) {
+                    const time = new Date(now - (tempHistory.length - 1 - i) * interval).toISOString();
+                    csv += `${time},${tempHistory[i] || ''},${humHistory[i] || ''},${gasHistory[i] || ''}\n`;
+                }
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'datos_fxi.csv'; a.click();
+                URL.revokeObjectURL(url);
+                showToast("CSV descargado");
             }
+
+            dom.saveThresholdsBtn.addEventListener('click', () => {
+                dangerTempThreshold = parseFloat(dom.thresholdDangerTemp.value) || 40;
+                UMBRAL_DESACTIVACION_FUEGO = parseFloat(dom.thresholdFireMqtt.value) || 35;
+                localStorage.setItem('dangerTemp', dangerTempThreshold);
+                localStorage.setItem('umbralFuego', UMBRAL_DESACTIVACION_FUEGO);
+                showToast("Umbrales guardados");
+            });
+
+            async function toggleServo() {
+                const btn = dom.btnServo;
+                btn.innerText = "ENVIANDO...";
+                btn.style.opacity = "0.7";
+                if (currentMode === 'mqtt' && mqttConnected) {
+                    mqttClient.publish('fxi/comandos', 'TOGGLE');
+                    setTimeout(() => {
+                        btn.style.opacity = "1";
+                        if (btn.classList.contains('active')) {
+                            btn.classList.remove('active');
+                            btn.innerText = "DESACTIVADO";
+                            dom.sweepLine.classList.remove('sweep-active');
+                        } else {
+                            btn.classList.add('active');
+                            btn.innerText = "SISTEMA ACTIVO";
+                            dom.sweepLine.classList.add('sweep-active');
+                        }
+                    }, 300);
+                } else {
+                    try {
+                        const res = await fetch('/toggleServo');
+                        const state = await res.text();
+                        btn.style.opacity = "1";
+                        if (state === "ON") {
+                            btn.classList.add('active');
+                            btn.innerText = "SISTEMA ACTIVO";
+                            dom.sweepLine.classList.add('sweep-active');
+                        } else {
+                            btn.classList.remove('active');
+                            btn.innerText = "DESACTIVADO";
+                            dom.sweepLine.classList.remove('sweep-active');
+                        }
+                    } catch(e) {
+                        btn.classList.remove('active');
+                        btn.style.opacity = "1";
+                        btn.innerText = "SIN CONEXIÓN";
+                        setTimeout(() => btn.innerText = "DESACTIVADO", 3000);
+                        showToast("Error al comunicar con el ESP32", true);
+                    }
+                }
+            }
+
+            const mqttOptions = {
+                connectTimeout: 4000,
+                clientId: 'web_' + Math.random().toString(16).substr(2, 8),
+                username: 'Admin',
+                password: 'FluxaIgnis2026',
+                keepalive: 30,
+                reconnectPeriod: 5000
+            };
+            const mqttBroker = 'wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt';
+
+            function conectarMQTT() {
+                if (mqttClient && mqttClient.connected) mqttClient.end();
+                mqttClient = mqtt.connect(mqttBroker, mqttOptions);
+                mqttClient.on('connect', () => {
+                    console.log('MQTT connected');
+                    mqttConnected = true;
+                    dom.espStatus.innerText = 'Online (MQTT)';
+                    dom.espStatus.classList.remove('offline');
+                    dom.netStatus.innerHTML = 'MQTT: Conectado';
+                    dom.netStatus.style.color = 'var(--text-sec)';
+                    mqttClient.subscribe('fxi/datos');
+                    mqttClient.subscribe('fxi/rssi');
+                    mqttClient.subscribe('fxi/emergencia');
+                    mqttClient.subscribe('fxi/simular');
+                    mqttClient.subscribe('fxi/admin/resp');
+                    mqttClient.subscribe('fxi/logs');
+                    mqttClient.subscribe('fxi/angulo');
+                    mqttClient.subscribe('fxi/flama1');
+                    mqttClient.subscribe('fxi/flama2');
+                    mqttClient.subscribe('fxi/bomba');
+                    addSystemLog("✅ MQTT conectado a HiveMQ Cloud", 'info');
+                    if (forcedMode !== 'http') setMode('mqtt');
+                });
+                mqttClient.on('message', (topic, payload) => {
+                    if (topic === 'fxi/admin/resp') { handleAdminResponse(topic, payload); return; }
+                    const msg = payload.toString();
+                    try {
+                        if (topic === 'fxi/datos') {
+                            if (potatoMode) {
+                                if (Date.now() - lastPotatoDataUpdate < 10000) return;
+                                lastPotatoDataUpdate = Date.now();
+                            }
+                            const data = JSON.parse(msg);
+                            if (data.temp !== undefined) actualizarTemperatura(data.temp);
+                            if (data.hum !== undefined) actualizarHumedad(data.hum);
+                            if (data.gas !== undefined) actualizarGas(data.gas);
+                            addDataPoint(data.temp, data.hum, data.gas);
+                            // *** NUEVO: evaluar sensores también en MQTT ***
+                            if (currentMode === 'mqtt') evaluateSensorData(data);
+                        } else if (topic === 'fxi/rssi') {
+                            const data = JSON.parse(msg);
+                            if (data.rssi !== undefined) actualizarRSSI(data.rssi);
+                        } else if (topic === 'fxi/emergencia') {
+                            const data = JSON.parse(msg);
+                            const motivo = data.motivo || "Incendio detectado";
+                            if (motivo.includes("AUMENTO") || motivo.includes("sospechoso")) return;
+                            setDangerMode(true, motivo);
+                            emergenciaActivaMQTT = true;
+                            if (Notification.permission === "granted") new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo });
+                            dom.netStatus.innerHTML = "🔴 ¡EMERGENCIA! " + motivo;
+                            dom.netStatus.style.color = "#FF3D00";
+                            setTimeout(() => {
+                                if (dangerMode && !emergenciaActivaMQTT) setDangerMode(false, "");
+                            }, 30000);
+                        } else if (topic === 'fxi/simular') simulationActive = (msg === 'FUEGO_ON');
+                        else if (topic === 'fxi/logs' && !potatoMode) {
+                            const data = JSON.parse(msg);
+                            addSystemLog(data.message || '', data.level || 'info');
+                        } else if (topic === 'fxi/angulo') {
+                            const ang = parseFloat(msg);
+                            if (!isNaN(ang)) updateServoAngle(ang);
+                        } else if (topic === 'fxi/flama1') {
+                            actualizarFlama(1, msg === 'ON');
+                        } else if (topic === 'fxi/flama2') {
+                            actualizarFlama(2, msg === 'ON');
+                        } else if (topic === 'fxi/bomba') {
+                            actualizarBomba(msg === 'ON');
+                        }
+                    } catch(e) { console.warn('MQTT message error', e); }
+                });
+                mqttClient.on('error', (err) => {
+                    console.error('MQTT error:', err);
+                    addSystemLog(`❌ Error MQTT: ${err.message}`, 'error');
+                });
+                mqttClient.on('offline', () => {
+                    mqttConnected = false;
+                    dom.espStatus.innerText = 'Offline (MQTT)';
+                    dom.espStatus.classList.add('offline');
+                    dom.netStatus.innerHTML = 'MQTT: Desconectado';
+                    dom.netStatus.style.color = '#F06292';
+                    addSystemLog("⚠️ MQTT desconectado, cambiando a modo HTTP", 'warn');
+                    if (forcedMode !== 'mqtt') setMode('http');
+                });
+            }
+
+            function setMode(mode) {
+                if (mode === currentMode) return;
+                currentMode = mode;
+                dom.adminModeBadge.innerText = mode.toUpperCase();
+                dom.modoIndicador.innerHTML = `Modo: ${mode.toUpperCase()}`;
+                addSystemLog(`Cambiando a modo ${mode.toUpperCase()}`, 'info');
+                if (adminAuthenticated && !potatoMode && !watchMode) {
+                    clearInterval(statsInterval); clearInterval(logsInterval);
+                    statsInterval = setInterval(updateStatsUI, mode === 'mqtt' ? 10000 : 8000);
+                    logsInterval = setInterval(updateLogsUI, mode === 'mqtt' ? 8000 : 6000);
+                    updateStatsUI(); updateLogsUI();
+                }
+                if (mode === 'http') {
+                    clearInterval(httpPollInterval);
+                    httpPollInterval = setInterval(() => { if (currentMode === 'http') httpGetEstado().catch(e => {}); }, potatoMode ? 10000 : 2000);
+                    httpGetEstado().catch(e => {});
+                } else {
+                    clearInterval(httpPollInterval);
+                }
+            }
+
+            function iniciarSistema() {
+                clearInterval(statsInterval); clearInterval(logsInterval); clearInterval(httpPollInterval);
+                conectarMQTT();
+                setTimeout(() => {
+                    if (!mqttConnected && currentMode !== 'http' && forcedMode !== 'mqtt') {
+                        setMode('http');
+                    }
+                }, 5000);
+                showToast("Reconectando...");
+            }
+
+            async function updateStatsUI() {
+                if (!adminAuthenticated || potatoMode || watchMode) return;
+                try {
+                    const stats = currentMode === 'mqtt' ? await sendAdminCommand('get_stats') : await httpGetJson('/info');
+                    const sketch = stats.sketch_percent || 45;
+                    const littlefs = stats.littlefs_percent || 23;
+                    dom.statsGrid.innerHTML = `
+                        <div class="stat-card"><div class="stat-label">FW</div><div class="stat-value">${stats.firmware || '--'}</div></div>
+                        <div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value">${formatUptime(stats.uptime || 0)}</div></div>
+                        <div class="stat-card"><div class="stat-label">Heap</div><div class="stat-value">${stats.heap_percent || 0}%</div></div>
+                        <div class="stat-card"><div class="stat-label">Flash</div><div class="stat-value">${sketch+littlefs}%</div></div>`;
+                } catch(e) { dom.statsGrid.innerHTML = '<div class="stat-card">Error</div>'; }
+            }
+            function formatUptime(s) { let d=Math.floor(s/86400), h=Math.floor((s%86400)/3600), m=Math.floor((s%3600)/60); return `${d}d ${h}h ${m}m`; }
             async function updateLogsUI() {
-                if (!adminAuthenticated || potatoMode) return;
+                if (!adminAuthenticated || potatoMode || watchMode) return;
                 try {
                     let logs;
                     if (currentMode === 'mqtt') {
@@ -1043,19 +1105,17 @@
                     if (!dom.liveLogs) return;
                     if (logs.length === 0) { dom.liveLogs.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>'; return; }
                     dom.liveLogs.innerHTML = '';
-                    const frag = document.createDocumentFragment();
                     logs.slice().reverse().forEach(log => {
                         const t = new Date(log.timestamp).toLocaleTimeString();
                         const entry = document.createElement('div');
                         entry.className = `log-entry log-${log.level}`;
                         entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
-                        frag.appendChild(entry);
+                        dom.liveLogs.appendChild(entry);
                     });
-                    dom.liveLogs.appendChild(frag);
                 } catch(e) {}
             }
             async function measurePing() {
-                if (!adminAuthenticated || potatoMode) return;
+                if (!adminAuthenticated || potatoMode || watchMode) return;
                 const start = performance.now();
                 try {
                     if (currentMode === 'mqtt') await sendAdminCommand('ping');
@@ -1089,189 +1149,55 @@
                 }
                 ctx.stroke();
             }
-
             async function sendCommand(cmd) {
                 if (!adminAuthenticated) { showToast("Accede al panel de admin primero", true); return; }
-                addSystemLog(`Comando: ${cmd} (modo ${currentMode})`, 'info');
                 try {
                     if (currentMode === 'mqtt') {
                         if (cmd === 'restart') { await sendAdminCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
-                        else if (cmd === 'check_ota') { await sendAdminCommand('check_ota'); showToast("Comprobando actualizaciones..."); }
-                        else if (cmd === 'toggle_sim') { const resp = await sendAdminCommand('toggle_sim'); simulationActive = resp.simulating; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`); if (mqttClient && mqttConnected) mqttClient.publish('fxi/simular', simulationActive ? 'FUEGO_ON' : 'FUEGO_OFF'); }
+                        else if (cmd === 'toggle_sim') { const resp = await sendAdminCommand('toggle_sim'); simulationActive = resp.simulating; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); }
                         else if (cmd === 'clear_logs') { await sendAdminCommand('clear_logs'); dom.liveLogs.innerHTML = '<div class="log-entry log-info">Logs limpiados</div>'; showToast("Logs limpiados"); }
                         else if (cmd === 'update_fw') { await sendAdminCommand('update_fw'); showToast("Iniciando actualización de firmware..."); }
-                        else if (cmd === 'update_html') { await sendAdminCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => window.location.reload(), 1000); }
+                        else if (cmd === 'update_html') { await sendAdminCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => location.reload(), 1000); }
                     } else {
                         if (cmd === 'restart') { await httpSendCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
-                        else if (cmd === 'check_ota') { await httpSendCommand('check_ota'); showToast("Comprobando actualizaciones..."); }
-                        else if (cmd === 'toggle_sim') { await httpSendCommand('toggle_sim'); simulationActive = !simulationActive; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`); }
+                        else if (cmd === 'toggle_sim') { await httpSendCommand('toggle_sim'); simulationActive = !simulationActive; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); }
                         else if (cmd === 'clear_logs') { await httpSendCommand('clear_logs'); dom.liveLogs.innerHTML = '<div class="log-entry log-info">Logs limpiados</div>'; showToast("Logs limpiados"); }
                         else if (cmd === 'update_fw') { await httpSendCommand('update_fw'); showToast("Iniciando actualización de firmware..."); }
-                        else if (cmd === 'update_html') { await httpSendCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => window.location.reload(), 1000); }
+                        else if (cmd === 'update_html') { await httpSendCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => location.reload(), 1000); }
                     }
                 } catch(e) { addSystemLog(`Error en comando ${cmd}: ${e.message}`, 'error'); showToast(`Error: ${e.message}`, true); }
             }
 
-            /* ========== SERVO ========== */
-            async function toggleServo() {
-                const btn = dom.btnServo;
-                btn.innerText = "ENVIANDO...";
-                btn.style.opacity = "0.7";
-                if (currentMode === 'mqtt' && mqttClient && mqttConnected) {
-                    mqttClient.publish('fxi/comandos', 'TOGGLE');
-                    setTimeout(() => {
-                        btn.style.opacity = "1";
-                        if (btn.classList.contains('active')) {
-                            btn.classList.remove('active');
-                            btn.innerText = "DESACTIVADO";
-                            if (!potatoMode) addSystemLog("🔁 Servo desactivado por MQTT", 'info');
-                        } else {
-                            btn.classList.add('active');
-                            btn.innerText = "SISTEMA ACTIVO";
-                            if (!potatoMode) addSystemLog("🔁 Servo activado por MQTT", 'info');
-                        }
-                    }, 300);
-                } else {
-                    try {
-                        const res = await fetch('/toggleServo');
-                        const state = await res.text();
-                        btn.style.opacity = "1";
-                        if (state === "ON") {
-                            btn.classList.add('active');
-                            btn.innerText = "SISTEMA ACTIVO";
-                        } else {
-                            btn.classList.remove('active');
-                            btn.innerText = "DESACTIVADO";
-                        }
-                    } catch(e) {
-                        btn.classList.remove('active');
-                        btn.style.opacity = "1";
-                        btn.innerText = "SIN CONEXIÓN";
-                        setTimeout(() => btn.innerText = "DESACTIVADO", 3000);
-                        showToast("Error al comunicar con el ESP32", true);
-                    }
+            function toggleWatchMode() {
+                watchMode = !watchMode;
+                document.body.classList.toggle('watch-mode', watchMode);
+                dom.watchToggle.innerText = watchMode ? '📱' : '⌚';
+                if (watchMode) clearIntervals();
+                else if (adminAuthenticated) startAdminServices();
+            }
+            function clearIntervals() { clearInterval(statsInterval); clearInterval(logsInterval); clearInterval(pingInterval); }
+            function startAdminServices() {
+                clearIntervals();
+                if (!potatoMode && !watchMode && adminAuthenticated) {
+                    updateStatsUI(); updateLogsUI();
+                    statsInterval = setInterval(updateStatsUI, currentMode === 'mqtt' ? 10000 : 8000);
+                    logsInterval = setInterval(updateLogsUI, currentMode === 'mqtt' ? 8000 : 6000);
+                    pingInterval = setInterval(measurePing, 10000);
+                    measurePing();
                 }
             }
 
-            /* ========== MQTT ========== */
-            const mqttOptions = {
-                connectTimeout: 4000,
-                clientId: 'web_' + Math.random().toString(16).substr(2, 8),
-                username: 'Admin',
-                password: 'FluxaIgnis2026',
-            };
-            const mqttBroker = 'wss://df734b8fbeed43978f29869442892dcf.s1.eu.hivemq.cloud:8884/mqtt';
-
-            function conectarMQTT() {
-                if (mqttClient && mqttClient.connected) mqttClient.end();
-                mqttClient = mqtt.connect(mqttBroker, mqttOptions);
-                mqttClient.on('connect', () => {
-                    mqttConnected = true;
-                    dom.espStatus.innerText = 'Online (MQTT)';
-                    dom.espStatus.classList.remove('offline');
-                    dom.netStatus.innerHTML = 'MQTT: Conectado';
-                    dom.netStatus.style.color = 'var(--text-sec)';
-                    mqttClient.subscribe('fxi/datos');
-                    mqttClient.subscribe('fxi/rssi');
-                    mqttClient.subscribe('fxi/emergencia');
-                    mqttClient.subscribe('fxi/simular');
-                    mqttClient.subscribe('fxi/admin/resp');
-                    mqttClient.subscribe('fxi/logs');
-                    if (!potatoMode) addSystemLog("✅ MQTT conectado", 'info');
-                    if (forcedMode !== 'http') setMode('mqtt');
-                    if (currentMode === 'http') setMode('mqtt');
-                });
-                mqttClient.on('message', (topic, payload) => {
-                    if (topic === 'fxi/admin/resp') { handleAdminResponse(topic, payload); return; }
-                    try {
-                        const msg = payload.toString();
-                        if (topic === 'fxi/datos') {
-                            if (potatoMode) {
-                                const now = Date.now();
-                                if (now - lastPotatoDataUpdate < 10000) return;
-                                lastPotatoDataUpdate = now;
-                            }
-                            const data = JSON.parse(msg);
-                            if (data.temp !== undefined) actualizarTemperatura(data.temp);
-                            if (data.hum !== undefined) actualizarHumedad(data.hum);
-                            if (data.gas !== undefined) actualizarGas(data.gas);
-                            addDataPoint(data.temp, data.hum, data.gas);
-                        } else if (topic === 'fxi/rssi') {
-                            const data = JSON.parse(msg);
-                            if (data.rssi !== undefined) actualizarRSSI(data.rssi);
-                        } else if (topic === 'fxi/emergencia') {
-                            const data = JSON.parse(msg);
-                            const motivo = data.motivo || "Incendio detectado";
-                            if (motivo.includes("AUMENTO") || motivo.includes("sospechoso")) return;
-                            setDangerMode(true, motivo);
-                            emergenciaActivaMQTT = true;
-                            if (Notification.permission === "granted") new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo });
-                            dom.netStatus.innerHTML = "🔴 ¡EMERGENCIA! " + motivo;
-                            dom.netStatus.style.color = "#FF3D00";
-                        } else if (topic === 'fxi/simular') simulationActive = (msg === 'FUEGO_ON');
-                        else if (topic === 'fxi/logs') {
-                            if (potatoMode) return;
-                            const data = JSON.parse(msg);
-                            addSystemLog(data.message || '', data.level || 'info');
-                        }
-                    } catch(e) { console.error(e); }
-                });
-                mqttClient.on('offline', () => {
-                    mqttConnected = false;
-                    dom.espStatus.innerText = 'Offline (MQTT)';
-                    dom.espStatus.classList.add('offline');
-                    dom.netStatus.innerHTML = 'MQTT: Desconectado';
-                    dom.netStatus.style.color = '#F06292';
-                    if (!potatoMode) addSystemLog("⚠️ MQTT desconectado, cambiando a modo HTTP", 'warn');
-                    if (forcedMode !== 'mqtt') setMode('http');
-                });
-            }
-
-            function setMode(mode) {
-                if (mode === currentMode) return;
-                currentMode = mode;
-                dom.adminModeBadge.innerText = mode.toUpperCase();
-                dom.modoIndicador.innerHTML = `Modo: ${mode.toUpperCase()}`;
-                if (!potatoMode) addSystemLog(`Cambiando a modo ${mode.toUpperCase()}`, 'info');
-                if (adminAuthenticated && !potatoMode) {
-                    clearInterval(statsInterval);
-                    clearInterval(logsInterval);
-                    statsInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) updateStatsUI(); }, mode === 'mqtt' ? 10000 : 8000);
-                    logsInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) updateLogsUI(); }, mode === 'mqtt' ? 8000 : 6000);
-                    updateStatsUI();
-                    updateLogsUI();
-                }
-                if (mode === 'http') {
-                    clearInterval(httpPollInterval);
-                    httpPollInterval = setInterval(() => { if (currentMode === 'http') httpGetEstado().catch(e => console.warn); }, potatoMode ? 10000 : 2000);
-                    httpGetEstado().catch(e => console.warn);
-                } else {
-                    clearInterval(httpPollInterval);
-                }
-            }
-
-            function iniciarSistema() {
-                clearInterval(statsInterval);
-                clearInterval(logsInterval);
-                clearInterval(httpPollInterval);
-                conectarMQTT();
-                setTimeout(() => { if (!mqttConnected && currentMode !== 'http' && forcedMode !== 'mqtt') setMode('http'); }, 5000);
-                showToast("Reconectando...");
-            }
-
-            /* ========== ADMIN PANEL ========== */
             async function expandAdmin() {
-                if (potatoMode) return; // No se puede expandir en modo papa
+                if (potatoMode || watchMode) return;
                 if (!adminAuthenticated) {
                     const pwd = await showPasswordModal("Acceso restringido", "Contraseña de administrador:");
                     if (pwd === adminPassword) {
                         adminAuthenticated = true;
                         dom.adminCard.classList.add('expanded');
                         startAdminServices();
-                        addSystemLog("🔓 Acceso concedido", 'info');
+                        addSystemLog("🔓 Acceso concedido al panel de administración", 'info');
                         showToast("Acceso concedido");
                     } else if (pwd !== null) showToast("Contraseña incorrecta", true);
-                    return;
                 } else {
                     dom.adminCard.classList.add('expanded');
                     startAdminServices();
@@ -1279,72 +1205,66 @@
             }
             function collapseAdmin() {
                 dom.adminCard.classList.remove('expanded');
-                clearInterval(statsInterval);
-                clearInterval(logsInterval);
-                clearInterval(pingInterval);
-            }
-            function startAdminServices() {
-                if (potatoMode) return;
-                clearInterval(statsInterval);
-                clearInterval(logsInterval);
-                clearInterval(pingInterval);
-                updateStatsUI();
-                updateLogsUI();
-                statsInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) updateStatsUI(); }, currentMode === 'mqtt' ? 10000 : 8000);
-                logsInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) updateLogsUI(); }, currentMode === 'mqtt' ? 8000 : 6000);
-                pingInterval = setInterval(() => { if (adminAuthenticated && !potatoMode) measurePing(); }, 10000);
-                measurePing();
+                clearIntervals();
             }
 
-            /* ========== EVENTOS ========== */
-            dom.rangeButtons.addEventListener('click', (e) => {
+            dom.downloadBtn.addEventListener('click', downloadCSV);
+            dom.watchToggle.addEventListener('click', toggleWatchMode);
+            dom.potatoToggle.addEventListener('click', () => {
+                potatoMode = !potatoMode;
+                document.body.classList.toggle('potato-mode', potatoMode);
+                dom.potatoToggle.innerText = potatoMode ? '🍟' : '🥔';
+                if (potatoMode) {
+                    previousBgEnabled = bgEnabled;
+                    bgEnabled = false; dom.bgToggle.innerText = '🚫'; dom.canvasBg.style.display = 'none';
+                    stopParticles(); clearIntervals();
+                    if (currentMode === 'http') { clearInterval(httpPollInterval); httpPollInterval = setInterval(() => { if (currentMode === 'http') httpGetEstado().catch(e => {}); }, 10000); }
+                } else {
+                    if (previousBgEnabled) { bgEnabled = true; dom.bgToggle.innerText = '✨'; dom.canvasBg.style.display = ''; resizeCanvas(); startParticles(); }
+                    if (adminAuthenticated && !watchMode) startAdminServices();
+                    if (currentMode === 'http') { clearInterval(httpPollInterval); httpPollInterval = setInterval(() => { if (currentMode === 'http') httpGetEstado().catch(e => {}); }, 2000); }
+                    lastSvgDrawTime = 0; throttledSVGUpdate();
+                }
+            });
+            dom.themeToggle.onclick = () => { isDarkMode = !isDarkMode; document.body.classList.toggle('light-mode'); dom.themeToggle.innerText = isDarkMode ? '✳' : '☀️'; };
+            dom.bgToggle.onclick = () => { if (potatoMode) return; bgEnabled = !bgEnabled; dom.bgToggle.innerText = bgEnabled ? '✨' : '🚫'; dom.canvasBg.style.display = bgEnabled ? '' : 'none'; if (bgEnabled) { resizeCanvas(); startParticles(); } else stopParticles(); };
+            dom.btnServo.onclick = toggleServo;
+            dom.reconnectBtn.onclick = iniciarSistema;
+            dom.resetAlertBtnSquare.onclick = resetAlertaForzado;
+            dom.forceHttpBtn.onclick = () => { forcedMode = 'http'; if (mqttConnected) mqttClient.end(); setMode('http'); };
+            dom.forceMqttBtn.onclick = () => { forcedMode = null; if (mqttConnected) setMode('mqtt'); else showToast("MQTT no conectado", true); };
+            dom.toggleTimestampBtn.onclick = () => {
+                showTimestamps = !showTimestamps;
+                document.querySelectorAll('.log-timestamp').forEach(span => span.classList.toggle('visible', showTimestamps));
+                dom.toggleTimestampBtn.innerText = showTimestamps ? "Ocultar timestamps" : "Mostrar timestamps";
+            };
+            dom.rangeButtons.onclick = (e) => {
                 const btn = e.target.closest('.range-btn');
                 if (!btn) return;
                 dom.rangeButtons.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 currentPoints = parseInt(btn.getAttribute('data-points'), 10);
-                lastSvgDrawTime = 0;
-                throttledSVGUpdate();
-            });
+                lastSvgDrawTime = 0; throttledSVGUpdate();
+            };
             document.querySelector('.range-btn[data-points="20"]').classList.add('active');
 
-            dom.adminCard.addEventListener('click', (e) => {
-                if (potatoMode) return;
-                if (e.target === dom.closeAdmin || e.target.parentElement === dom.closeAdmin) {
-                    collapseAdmin();
-                    return;
-                }
-                if (!dom.adminCard.classList.contains('expanded') && !e.target.closest('.admin-expanded')) {
-                    expandAdmin();
-                }
-            });
-
+            dom.adminCard.onclick = (e) => {
+                if (e.target === dom.closeAdmin || e.target.parentElement === dom.closeAdmin) collapseAdmin();
+                else if (!dom.adminCard.classList.contains('expanded') && !e.target.closest('.admin-expanded')) expandAdmin();
+            };
             document.querySelectorAll('.admin-section-header').forEach(header => {
-                header.addEventListener('click', (e) => {
-                    if (potatoMode) return;
-                    e.stopPropagation();
+                header.onclick = () => {
+                    if (potatoMode || watchMode) return;
                     header.closest('.admin-section').classList.toggle('open');
-                });
+                };
             });
-
-            dom.resetAlertBtnSquare.addEventListener('click', resetAlertaForzado);
-            dom.reconnectBtn.addEventListener('click', iniciarSistema);
-            dom.btnServo.addEventListener('click', toggleServo);
-            dom.forceHttpBtn.addEventListener('click', () => { forcedMode = 'http'; if (mqttConnected) mqttClient.end(); setMode('http'); });
-            dom.forceMqttBtn.addEventListener('click', () => { forcedMode = null; if (mqttConnected) setMode('mqtt'); else showToast("MQTT no conectado", true); });
-            dom.toggleTimestampBtn.addEventListener('click', () => {
-                showTimestamps = !showTimestamps;
-                document.querySelectorAll('.log-timestamp').forEach(span => span.classList.toggle('visible', showTimestamps));
-                dom.toggleTimestampBtn.innerText = showTimestamps ? "Ocultar timestamps" : "Mostrar timestamps";
-            });
-
             function fillActionBlocks(container, list) {
                 container.innerHTML = '';
                 list.forEach(a => {
                     const div = document.createElement('div');
                     div.className = 'action-block';
                     div.innerHTML = `<span class="action-icon">${a.icon}</span><span class="action-label">${a.label}</span>`;
-                    div.addEventListener('click', () => sendCommand(a.cmd));
+                    div.onclick = () => sendCommand(a.cmd);
                     container.appendChild(div);
                 });
             }
@@ -1359,152 +1279,28 @@
                 { icon: "🌐", label: "Actualizar HTML", cmd: "update_html" }
             ]);
 
-            /* ========== MODO PAPA ========== */
-            dom.potatoToggle.addEventListener('click', () => {
-                potatoMode = !potatoMode;
-                document.body.classList.toggle('potato-mode', potatoMode);
-                dom.potatoToggle.innerText = potatoMode ? '🍟' : '🥔';
-
-                if (potatoMode) {
-                    // Guardar estado del fondo para restaurar después
-                    previousBgEnabled = bgEnabled;
-                    bgEnabled = false;
-                    dom.bgToggle.innerText = '🚫';
-                    dom.canvasBg.style.display = 'none';
-                    stopParticles();
-
-                    // Detener todos los intervalos de admin
-                    clearInterval(statsInterval);
-                    clearInterval(logsInterval);
-                    clearInterval(pingInterval);
-                    // Ajustar el polling HTTP a 10s
-                    if (currentMode === 'http') {
-                        clearInterval(httpPollInterval);
-                        httpPollInterval = setInterval(() => { if (currentMode === 'http' && potatoMode) httpGetEstado().catch(e => console.warn); }, 10000);
-                    }
-                    lastPotatoDataUpdate = 0;
-                } else {
-                    // Restaurar fondo si estaba activo antes
-                    if (previousBgEnabled) {
-                        bgEnabled = true;
-                        dom.bgToggle.innerText = '✨';
-                        dom.canvasBg.style.display = '';
-                        resizeCanvas();
-                        startParticles();
-                    } else {
-                        bgEnabled = false;
-                        dom.bgToggle.innerText = '🚫';
-                        dom.canvasBg.style.display = 'none';
-                    }
-
-                    // Reactivar servicios de admin si corresponde
-                    if (adminAuthenticated) startAdminServices();
-                    if (currentMode === 'http') {
-                        clearInterval(httpPollInterval);
-                        httpPollInterval = setInterval(() => { if (currentMode === 'http' && !potatoMode) httpGetEstado().catch(e => console.warn); }, 2000);
-                    }
-                    lastSvgDrawTime = 0;
-                    throttledSVGUpdate();
-                }
-            });
-
-            /* ========== TEMA Y PARTÍCULAS ========== */
-            dom.themeToggle.onclick = () => {
-                isDarkMode = !isDarkMode;
-                document.body.classList.toggle('light-mode');
-                dom.themeToggle.innerText = isDarkMode ? '✳' : '☀️';
-                if (bgEnabled && !potatoMode) updateParticleColors();
-            };
-
-            dom.bgToggle.onclick = () => {
-                if (potatoMode) return; // no permitir cambiar fondo en modo papa
-                bgEnabled = !bgEnabled;
-                dom.bgToggle.innerText = bgEnabled ? '✨' : '🚫';
-                dom.canvasBg.style.display = bgEnabled ? '' : 'none';
-                if (bgEnabled) {
-                    resizeCanvas();
-                    startParticles();
-                } else {
-                    stopParticles();
-                }
-            };
-
-            function resizeCanvas() {
-                const scale = 0.5;
-                dom.canvasBg.width = window.innerWidth * scale;
-                dom.canvasBg.height = window.innerHeight * scale;
-                ctxBg.scale(scale, scale);
-                if (bgEnabled && !potatoMode) initParticles();
-            }
-            window.addEventListener('resize', () => {
-                resizeCanvas();
-                if (bgEnabled && !potatoMode) initParticles();
-            });
-
+            function resizeCanvas() { dom.canvasBg.width = window.innerWidth; dom.canvasBg.height = window.innerHeight; }
+            window.onresize = resizeCanvas; resizeCanvas();
             class Particle {
                 constructor() { this.reset(); }
-                reset() {
-                    this.x = Math.random() * dom.canvasBg.width;
-                    this.y = Math.random() * dom.canvasBg.height;
-                    this.size = Math.random() * 1.8 + 0.8;
-                    this.alpha = Math.random();
-                    this.speed = Math.random() * 0.018;
-                }
+                reset() { this.x = Math.random() * dom.canvasBg.width; this.y = Math.random() * dom.canvasBg.height; this.size = Math.random() * 1.8 + 0.8; this.alpha = Math.random(); this.speed = Math.random() * 0.018; }
                 update() { this.alpha += this.speed; if(this.alpha > 1 || this.alpha < 0) this.speed *= -1; }
-                draw() {
-                    ctxBg.fillStyle = isDarkMode ? `rgba(234,226,209,${this.alpha*0.18})` : `rgba(11,57,84,${this.alpha*0.08})`;
-                    ctxBg.beginPath();
-                    ctxBg.arc(this.x, this.y, this.size, 0, Math.PI*2);
-                    ctxBg.fill();
-                }
+                draw() { ctxBg.fillStyle = isDarkMode ? `rgba(234,226,209,${this.alpha*0.18})` : `rgba(11,57,84,${this.alpha*0.08})`; ctxBg.beginPath(); ctxBg.arc(this.x, this.y, this.size, 0, Math.PI*2); ctxBg.fill(); }
             }
-            function initParticles() {
-                particles = [];
-                const count = window.innerWidth < 768 ? 6 : (window.innerWidth < 1400 ? 10 : 14);
-                for(let i=0; i<count; i++) particles.push(new Particle());
-            }
-            function updateParticleColors() {
-                // solo cambia el color en draw()
-            }
-            function animateParticles() {
-                if (!bgEnabled || potatoMode) return;
-                ctxBg.clearRect(0,0,dom.canvasBg.width,dom.canvasBg.height);
-                for(let p of particles) { p.update(); p.draw(); }
-                animationId = requestAnimationFrame(animateParticles);
-            }
-            function startParticles() {
-                if (animationId) cancelAnimationFrame(animationId);
-                if (!bgEnabled || potatoMode) return;
-                initParticles();
-                animateParticles();
-            }
-            function stopParticles() {
-                if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
-            }
+            function initParticles() { particles = []; const count = window.innerWidth < 768 ? 6 : (window.innerWidth < 1400 ? 10 : 14); for(let i=0; i<count; i++) particles.push(new Particle()); }
+            function animateParticles() { if(!bgEnabled||potatoMode) return; ctxBg.clearRect(0,0,dom.canvasBg.width,dom.canvasBg.height); particles.forEach(p=>{p.update();p.draw();}); animationId = requestAnimationFrame(animateParticles); }
+            function startParticles() { if(animationId) cancelAnimationFrame(animationId); if(!bgEnabled||potatoMode) return; initParticles(); animateParticles(); }
+            function stopParticles() { if(animationId) { cancelAnimationFrame(animationId); animationId = null; } }
             document.addEventListener('visibilitychange', () => {
-                if (document.hidden) {
-                    stopParticles();
-                    clearInterval(statsInterval);
-                    clearInterval(logsInterval);
-                    clearInterval(pingInterval);
-                    clearInterval(httpPollInterval);
-                } else {
-                    if (bgEnabled && !potatoMode) startParticles();
-                    if (adminAuthenticated && !potatoMode) startAdminServices();
-                    if (currentMode === 'http' && !potatoMode) {
-                        httpPollInterval = setInterval(() => { if (currentMode === 'http' && !potatoMode) httpGetEstado().catch(e => console.warn); }, 2000);
-                    } else if (currentMode === 'http' && potatoMode) {
-                        httpPollInterval = setInterval(() => { if (currentMode === 'http' && potatoMode) httpGetEstado().catch(e => console.warn); }, 10000);
-                    }
-                }
+                if(document.hidden) { stopParticles(); clearIntervals(); clearInterval(httpPollInterval); }
+                else { if(bgEnabled&&!potatoMode) startParticles(); if(adminAuthenticated&&!potatoMode&&!watchMode) startAdminServices(); if(currentMode==='http'){ clearInterval(httpPollInterval); httpPollInterval = setInterval(() => { if (currentMode === 'http') httpGetEstado().catch(e => {}); }, potatoMode?10000:2000); } }
             });
 
-            resizeCanvas();
-            if (bgEnabled && !potatoMode) startParticles();
-
+            if(bgEnabled) startParticles();
+            updateServoAngle(90);
             if (Notification.permission === "default") Notification.requestPermission();
             conectarMQTT();
-            if (!potatoMode) addSystemLog("🚀 Panel listo (modo normal)", 'info');
+            addSystemLog("🚀 Panel listo (MQTT+HTTP). Detección autónoma de sensores activa.", 'info');
             setTimeout(() => {
                 if (!mqttConnected && currentMode === 'mqtt' && forcedMode !== 'mqtt') setMode('http');
             }, 5000);
