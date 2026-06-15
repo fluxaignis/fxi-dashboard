@@ -15,9 +15,7 @@
 #include <ArduinoJson.h>
 
 // ==================== COMPENSACIÓN DE TEMPERATURA ====================
-// Se resta este valor a la lectura del DHT11 para estimar la temperatura ambiente
-// debido al calentamiento interno de los componentes (MQ-2, ESP32, etc.)
-const float OFFSET_TEMP = 5.0;   // grados a restar
+const float OFFSET_TEMP = 5.0;
 
 // ==================== BUFFER DE LOGS ====================
 #define MAX_LOGS 20
@@ -36,7 +34,7 @@ const char* urlVersion = "https://raw.githubusercontent.com/fluxaignis/fxi-dashb
 const char* urlFirmware = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/gh-pages/firmware.bin";
 const char* urlHTML = "https://raw.githubusercontent.com/fluxaignis/fxi-dashboard/main/index.html";
 unsigned long ultimoChequeoOTA = 0;
-const unsigned long INTERVALO_OTA = 60001;   // 1 minuto (pruebas)
+const unsigned long INTERVALO_OTA = 60001;
 
 // ==================== PINES ====================
 #define DHTPIN 27
@@ -60,7 +58,7 @@ PubSubClient client(espClient);
 WebServer server(80);
 DNSServer dnsServer;
 
-// ==================== FUNCIÓN addLog ====================
+// ==================== addLog ====================
 void addLog(String level, String message) {
   if (message.length() > 100) message = message.substring(0, 97) + "...";
   logBuffer[logIndex].timestamp = millis();
@@ -79,8 +77,8 @@ void addLog(String level, String message) {
 // ==================== ESTADOS Y TIEMPOS ====================
 enum EstadoSistema { REPOSO, ESPERANDO_AGUA, APUNTANDO };
 EstadoSistema estadoActual = REPOSO;
-const int SERVO_IZQ = 0;        // Giro continuo izquierda
-const int SERVO_DER = 180;      // Giro continuo derecha
+const int SERVO_IZQ = 0;        // Giro izquierda
+const int SERVO_DER = 180;      // Giro derecha
 const int SERVO_CENTRO = 90;    // Parado
 unsigned long TIEMPO_APUNTAR = 2000;
 unsigned long cronometroRutina = 0;
@@ -104,58 +102,47 @@ bool simularFuego = false;
 int llamaIzq = 4095;
 int llamaDer = 4095;
 
-// ==================== VARIABLES PARA EL RITMO DEL BUZZER ====================
-// Patrón: 3 pitidos cortos (150ms ON, 150ms OFF) + pausa de 500ms, se repite
+// ==================== BUZZER ====================
 const int BEEPS_PER_CYCLE = 3;
 const unsigned long BEEP_ON_MS = 150;
 const unsigned long BEEP_OFF_MS = 150;
 const unsigned long PAUSE_MS = 500;
 int beepCounter = 0;
 unsigned long lastBuzzerTime = 0;
-bool buzzerState = false;  // false = apagado, true = sonando
+bool buzzerState = false;
 bool inPause = false;
 
 void updateBuzzer() {
   unsigned long ahora = millis();
   if (estadoActual == REPOSO) {
-    // No hay emergencia, asegurar que el buzzer esté apagado
     if (buzzerState) {
       noTone(PIN_BUZZER);
       buzzerState = false;
     }
-    // Resetear el contador para la próxima emergencia
     beepCounter = 0;
     inPause = false;
     lastBuzzerTime = ahora;
     return;
   }
-
-  // Gestión del patrón de pitidos
   if (!inPause) {
-    // Estamos en la secuencia de pitidos (tres beeps)
     if (!buzzerState) {
-      // Iniciar un pitido
       tone(PIN_BUZZER, 2000);
       buzzerState = true;
       lastBuzzerTime = ahora;
     } else {
-      // Pitido activo, comprobar si toca apagarlo
       if (ahora - lastBuzzerTime >= BEEP_ON_MS) {
         noTone(PIN_BUZZER);
         buzzerState = false;
         lastBuzzerTime = ahora;
         beepCounter++;
         if (beepCounter >= BEEPS_PER_CYCLE) {
-          // Terminaron los tres pitidos, pasar a pausa
           inPause = true;
           beepCounter = 0;
         }
       }
     }
   } else {
-    // Estamos en la pausa después de los tres pitidos
     if (!buzzerState) {
-      // Esperar el tiempo de pausa
       if (ahora - lastBuzzerTime >= PAUSE_MS) {
         inPause = false;
         lastBuzzerTime = ahora;
@@ -184,7 +171,7 @@ const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -14400;
 const int daylightOffset_sec = 0;
 
-// ==================== FUNCIONES AUXILIARES ====================
+// ==================== AUXILIARES ====================
 void setColor(int r, int g, int b) {
   analogWrite(PIN_ROJO, r);
   analogWrite(PIN_VERDE, g);
@@ -223,7 +210,7 @@ void detenerRutina() {
   addLog("info", "Rutina detenida.");
 }
 
-// ==================== GESTIÓN CREDENCIALES WiFi ====================
+// ==================== CREDENCIALES WiFi ====================
 bool leerCredencialesWiFi() {
   File f = LittleFS.open("/wifi.txt", "r");
   if (!f) {
@@ -255,7 +242,7 @@ void guardarCredencialesWiFi(const String &ssid, const String &password) {
   }
 }
 
-// ==================== ACTUALIZACIONES OTA y HTML ====================
+// ==================== OTA ====================
 void guardarVersion(String version) {
   File f = LittleFS.open("/version.txt", "w");
   if (f) {
@@ -636,7 +623,6 @@ void setup() {
   servoVertical.setPeriodHertz(50); servoVertical.attach(PIN_SERVO_V, 500, 2400);
   servoHorizontal.write(SERVO_CENTRO); servoVertical.write(20);
 
-  // LittleFS con formateo automático
   bool littlefsOk = LittleFS.begin(false);
   if (!littlefsOk) {
     addLog("error", "Error al montar LittleFS. Formateando...");
@@ -707,7 +693,6 @@ void setup() {
 
   ultimoChequeoOTA = millis();
 
-  // Lectura inicial del DHT
   for (int i = 0; i < 5 && (isnan(tempGuardada) || isnan(humGuardada)); i++) {
     float t = dht.readTemperature();
     float h = dht.readHumidity();
@@ -717,7 +702,7 @@ void setup() {
   }
 }
 
-// ==================== LOOP PRINCIPAL ====================
+// ==================== LOOP PRINCIPAL (con publicaciones adicionales) ====================
 void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
@@ -768,6 +753,30 @@ void loop() {
   gasValue = analogRead(PIN_MQ2);
   rssiGuardado = WiFi.RSSI();
 
+  // ========== PUBLICACIONES MQTT ADICIONALES PARA EL HTML ==========
+  if (client.connected()) {
+    // Estado individual de cada sensor KY‑026
+    bool fuegoIzq = (llamaIzq < UMBRAL_FUEGO);
+    bool fuegoDer = (llamaDer < UMBRAL_FUEGO);
+    client.publish("fxi/flama1", fuegoIzq ? "ON" : "OFF");
+    client.publish("fxi/flama2", fuegoDer ? "ON" : "OFF");
+    // Estado de la bomba
+    client.publish("fxi/bomba", digitalRead(PIN_BOMBA) ? "ON" : "OFF");
+    // Ángulo actual del servo (para el gráfico de cobertura)
+    int angulo = SERVO_CENTRO;
+    if (estadoActual == APUNTANDO) {
+      switch (ladoEmergencia) {
+        case 1: angulo = SERVO_IZQ; break;
+        case 2: angulo = SERVO_DER; break;
+        default: angulo = SERVO_CENTRO; break;
+      }
+    } else {
+      angulo = SERVO_CENTRO;
+    }
+    client.publish("fxi/angulo", String(angulo).c_str());
+  }
+
+  // Lógica de emergencia (sin cambios)
   if (estadoActual == REPOSO && !emergenciaActiva) {
     bool fuegoIzq = (llamaIzq < UMBRAL_FUEGO);
     bool fuegoDer = (llamaDer < UMBRAL_FUEGO);
@@ -813,7 +822,7 @@ void loop() {
   // Control del LED RGB
   if (estadoActual != REPOSO) {
     setColor(255, 0, 0);
-    updateBuzzer();   // maneja el patrón de pitidos durante la emergencia
+    updateBuzzer();
   } else {
     noTone(PIN_BUZZER);
     buzzerState = false;
@@ -829,7 +838,7 @@ void loop() {
     }
   }
 
-  // Máquina de estados para la extinción
+  // Máquina de estados de extinción
   switch (estadoActual) {
     case REPOSO:
       break;
@@ -852,7 +861,7 @@ void loop() {
       break;
   }
 
-  // Publicación MQTT
+  // Publicación de datos periódica
   if (WiFi.status() == WL_CONNECTED && client.connected()) {
     if (ahora - cronometroDatos > 2000) {
       cronometroDatos = ahora;
