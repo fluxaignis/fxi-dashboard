@@ -271,7 +271,7 @@ bool actualizarHTML() {
   }
   addLog("info", "Descargando HTML desde GitHub...");
   HTTPClient http;
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);  // sigue redirecciones
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   http.setTimeout(15000);
   http.begin(espClient, urlHTML);
   int httpCode = http.GET();
@@ -676,14 +676,19 @@ void loop() {
     emergenciaEnviada = false;
   }
 
-  // LED y buzzer
+  // LED y buzzer (CORREGIDO)
   if (estadoActual != REPOSO) {
     setColor(255, 0, 0); updateBuzzer();
   } else {
     noTone(PIN_BUZZER); buzzerState = false;
-    if (!isnan(tempGuardada) && tempGuardada >= 35.0) setColor(255, 0, 0);
-    else if (WiFi.status() == WL_CONNECTED) setColor(client.connected() ? 0x00FF00 : 0xFFFF00);
-    else setColor(0x00FFFF);
+    if (!isnan(tempGuardada) && tempGuardada >= 35.0) {
+      setColor(255, 0, 0);               // rojo (calor elevado)
+    } else if (WiFi.status() == WL_CONNECTED) {
+      if (client.connected()) setColor(0, 255, 0);   // verde (MQTT conectado)
+      else                    setColor(255, 255, 0); // amarillo (WiFi sin MQTT)
+    } else {
+      setColor(0, 255, 255);             // cyan (sin WiFi)
+    }
   }
 
   switch (estadoActual) {
@@ -716,7 +721,6 @@ void loop() {
     ultimoChequeoOTA = ahora; chequearActualizacionGitHub();
   }
 
-  // Actualización diaria del HTML (si hay internet)
   static unsigned long ultimaActualizacionHTML = 0;
   if (ahora - ultimaActualizacionHTML >= 86400000UL && WiFi.status() == WL_CONNECTED) {
     actualizarHTML();
