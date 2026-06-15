@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FXI Panel de control</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="apple-touch-icon" href="favicon-192x192.png">
+    <link rel="manifest" href="manifest.json">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <style>
+        /* ==================== BASE ==================== */
+        :root {
+            --bg-start: #0B3954;
+            --bg-end: #061A2B;
+            --glass-bg: rgba(20, 30, 50, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #FFFFFF;
+            --text-sec: rgba(255, 255, 255, 0.6);
+            --accent-cyan: #7AF0D4;
+            --accent-blue: #EAE2D1;
+            --chart-pink: #F06292;
+            --chart-blue: #4FC3F7;
+            --chart-green: #81C784;
+            --flame-normal: #FFA726;
+            --flame-danger: #FF3D00;
+            --danger-glow: rgba(255, 61, 0, 0.6);
+            --color-firmware: #3F51B5;
+            --color-littlefs: #FFA726;
+            --color-free: #7AF0D4;
+        }
+        body.light-mode {
+            --bg-start: #E0F2F1;
+            --bg-end: #B2EBF2;
+            --glass-bg: rgba(255, 255, 255, 0.5);
+            --glass-border: rgba(0, 0, 0, 0.05);
+            --text-main: #0B3954;
+            --text-sec: rgba(11, 57, 84, 0.6);
+            --danger-glow: rgba(255, 61, 0, 0.8);
+        }
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background 0.5s ease;
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: var(--accent-cyan); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+        #weather-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none;
+        }
+        .main-content {
+            position: relative; z-index: 2;
+            max-width: 1200px; margin: 0 auto;
+            padding: 40px 20px;
+            display: flex; flex-direction: column;
+        }
+        .header {
+            display: flex; align-items: center; margin-bottom: 35px;
+            width: 100%; flex-wrap: wrap; gap: 15px;
+        }
+        .fxi-logo {
+            font-weight: 900; font-size: 32px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-right: auto;
+        }
+        #theme-toggle {
+            cursor: pointer; font-size: 26px;
+            transition: transform 0.2s;
+        }
+        #theme-toggle:hover { transform: scale(1.2); }
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1.8fr 1.2fr;
+            gap: 25px;
+        }
+        .left-column, .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        .right-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .glass-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 28px;
+            padding: 25px;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+        .glass-card:hover { transform: translateY(-5px); }
+        .card-title {
+            font-size: 12px; font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-sec);
+            margin-bottom: 10px;
+        }
+        .val-big { font-size: clamp(40px, 8vw, 64px); font-weight: 200; }
+        .val-med { font-size: 32px; font-weight: 500; }
+        .unit { font-size: 16px; opacity: 0.7; }
+        .chart-container {
+            height: 120px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            margin-top: 15px;
+        }
+        .bar-group { width: 35px; text-align: center; }
+        .bar-bg {
+            height: 80px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 6px;
+            display: flex;
+            align-items: flex-end;
+            overflow: hidden;
+        }
+        .bar-fill {
+            width: 100%;
+            transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-update, .btn-reset, .action-square {
+            background: var(--accent-blue);
+            color: #0B3954;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-reset {
+            background: var(--chart-pink);
+            color: white;
+        }
+        .btn-update:hover, .btn-reset:hover, .action-square:hover { transform: translateY(-2px); }
+        #esp-status {
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: var(--chart-green);
+            color: #fff;
+        }
+        @media (max-width: 850px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .right-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 480px) {
+            .right-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; align-items: flex-start; }
+            #theme-toggle { margin-left: 0; }
+        }
+        .btn-servo {
+            background: rgba(255,255,255,0.05);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 10px 20px;
+            border-radius: 15px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s;
+        }
+        .btn-servo.active {
+            background: var(--accent-cyan);
+            color: #0B3954;
+            box-shadow: 0 0 20px rgba(122,240,212,0.4);
+        }
+        .btn-servo:hover {
+            background: rgba(122,240,212,0.1);
+            transform: translateY(-2px);
+        }
+        .flame-card { text-align: center; cursor: pointer; }
+        .flame-icon {
+            font-size: 70px;
+            transition: all 0.3s ease;
+            filter: drop-shadow(0 0 5px rgba(0,0,0,0.3));
+        }
+        .flame-icon.normal {
+            color: var(--flame-normal);
+            text-shadow: 0 0 5px #FFA726;
+        }
+        .flame-icon.danger {
+            color: var(--flame-danger);
+            text-shadow: 0 0 20px #FF3D00;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .flame-status {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .chart-wrapper {
+            height: 220px;
+            margin-top: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            padding: 10px;
+        }
+        .svg-chart {
+            width: 100%;
+            height: 180px;
+            background: transparent;
+        }
+        .range-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .range-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 4px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .range-btn.active {
+            background: var(--accent-cyan);
+            color: #0B3954;
+        }
+        .avg-text {
+            font-size: 12px;
+            text-align: center;
+            margin-top: 10px;
+            color: var(--text-sec);
+        }
+        .legend {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 8px;
+            font-size: 11px;
+        }
+        .legend-temp { color: #F06292; }
+        .legend-hum { color: #4FC3F7; }
+
+        /* ----- ADMIN PANEL ----- */
+        .admin-card {
+            grid-column: span 2;
+            transition: all 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+            cursor: pointer;
+            overflow: hidden;
+        }
+        .admin-card .admin-reduced {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .admin-card .admin-expanded {
+            display: none;
+        }
+        .admin-card.expanded .admin-reduced { display: none; }
+        .admin-card.expanded .admin-expanded { display: block; animation: fadeInUp 0.3s ease; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .admin-section {
+            background: rgba(0,0,0,0.2);
+            border-radius: 20px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .admin-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.03);
+            transition: background 0.2s;
+            user-select: none;
+        }
+        .admin-section-header:hover { background: rgba(255,255,255,0.08); }
+        .admin-section-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--accent-cyan);
+        }
+        .admin-section-icon { transition: transform 0.3s ease; }
+        .admin-section-content {
+            padding: 16px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            display: none;
+        }
+        .admin-section.open .admin-section-content { display: block; }
+        .admin-section.open .admin-section-icon { transform: rotate(90deg); }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+        }
+        .stat-card {
+            background: rgba(0,0,0,0.25);
+            border-radius: 16px;
+            padding: 12px;
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: var(--text-sec);
+        }
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .progress-bar {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            height: 6px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            background: var(--accent-cyan);
+            height: 100%;
+            width: 0%;
+        }
+        .stacked-bar {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            height: 8px;
+            margin-top: 8px;
+            display: flex;
+            overflow: hidden;
+        }
+        .segment-firmware { background-color: var(--color-firmware); height: 100%; }
+        .segment-littlefs { background-color: var(--color-littlefs); height: 100%; }
+        .segment-free { background-color: var(--color-free); height: 100%; }
+
+        .action-blocks {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+        }
+        .action-block {
+            background: rgba(0,0,0,0.3);
+            border-radius: 20px;
+            padding: 12px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid rgba(122,240,212,0.2);
+        }
+        .action-block:hover {
+            background: rgba(122,240,212,0.15);
+            transform: translateY(-3px);
+            border-color: var(--accent-cyan);
+        }
+        .action-icon { font-size: 24px; display: block; margin-bottom: 5px; }
+        .action-label { font-size: 12px; }
+
+        .log-container {
+            background: rgba(0,0,0,0.4);
+            border-radius: 16px;
+            padding: 10px;
+            max-height: 260px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 4px 8px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.2);
+            border-left: 3px solid;
+            cursor: help;
+        }
+        .log-info { border-left-color: #4FC3F7; }
+        .log-warn { border-left-color: #FFD54F; color: #FFD54F; }
+        .log-error { border-left-color: #F06292; color: #F06292; }
+        .log-alert { border-left-color: #FF3D00; color: #FF3D00; }
+        .log-timestamp { display: none; color: var(--text-sec); font-size: 9px; margin-right: 8px; }
+        .log-timestamp.visible { display: inline; }
+        .toggle-timestamp {
+            background: none;
+            border: none;
+            color: var(--accent-cyan);
+            cursor: pointer;
+            font-size: 11px;
+            margin-bottom: 8px;
+            text-decoration: underline;
+        }
+
+        .ping-graph {
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+            padding: 10px;
+            height: 100px;
+        }
+        #pingCanvas { width: 100%; height: 80px; background: rgba(0,0,0,0.2); border-radius: 12px; }
+
+        /* ========== MODAL Y TOAST ========== */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 28px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            animation: fadeInUp 0.3s ease;
+        }
+        .modal-content h3 {
+            margin-top: 0;
+            color: var(--accent-cyan);
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            margin: 15px 0;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            color: var(--text-main);
+            font-size: 1rem;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        .modal-buttons button {
+            padding: 8px 20px;
+            border-radius: 40px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .modal-buttons button:first-child {
+            background: var(--accent-blue);
+            color: #0B3954;
+        }
+        .modal-buttons button:last-child {
+            background: var(--chart-pink);
+            color: white;
+        }
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-weight: bold;
+            z-index: 1100;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            white-space: nowrap;
+            font-size: 14px;
+        }
+        .toast.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="weather-canvas"></canvas>
+    <div class="main-content">
+        <div class="header">
+            <div class="fxi-logo">FLUXA IGNIS</div>
+            <div>
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div style="font-weight: 600;">Módulo ESP32</div>
+                    <span id="esp-status">Online</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-sec);">Sistema Activo</div>
+            </div>
+            <div id="theme-toggle">✳</div>
+        </div>
+
+        <div class="dashboard-grid">
+            <!-- Columna izquierda -->
+            <div class="left-column">
+                <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div class="card-title">Temperatura</div>
+                        <div class="val-big" id="temp-val">--<span class="unit">°C</span></div>
+                        <div id="desc-val" style="font-size: 14px; opacity: 0.8;">Esperando datos...</div>
+                    </div>
+                    <div style="font-size: 60px;">🌡️</div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="card-title">Niveles Actuales</div>
+                    <div class="chart-container">
+                        <div class="bar-group">
+                            <div class="bar-bg"><div id="bar-temp" class="bar-fill" style="background: var(--chart-pink);"></div></div>
+                            <div>T</div>
+                        </div>
+                        <div class="bar-group">
+                            <div class="bar-bg"><div id="bar-hum" class="bar-fill" style="background: var(--chart-blue);"></div></div>
+                            <div>H</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="card-title">Tendencias (Temp / Hum)</div>
+                    <div class="legend">
+                        <span class="legend-temp">● Temperatura (°C)</span>
+                        <span class="legend-hum">● Humedad (%)</span>
+                    </div>
+                    <div class="chart-wrapper">
+                        <svg id="trendChart" class="svg-chart" viewBox="0 0 600 180" preserveAspectRatio="none">
+                            <line x1="40" y1="160" x2="570" y2="160" stroke="white" stroke-width="1" opacity="0.4"/>
+                            <line x1="40" y1="10" x2="40" y2="160" stroke="white" stroke-width="1" opacity="0.4"/>
+                            <polyline id="tempLine" fill="none" stroke="#F06292" stroke-width="2.5" points=""/>
+                            <polyline id="humLine" fill="none" stroke="#4FC3F7" stroke-width="2.5" points=""/>
+                            <text x="15" y="165" fill="white" font-size="8" opacity="0.5">0°</text>
+                            <text x="15" y="20" fill="white" font-size="8" opacity="0.5">40°</text>
+                            <text x="580" y="165" fill="white" font-size="8" opacity="0.5">0%</text>
+                            <text x="580" y="20" fill="white" font-size="8" opacity="0.5">100%</text>
+                        </svg>
+                    </div>
+                    <div class="range-buttons">
+                        <button class="range-btn" data-points="10">10</button>
+                        <button class="range-btn" data-points="20">20</button>
+                        <button class="range-btn" data-points="30">30</button>
+                        <button class="range-btn" data-points="50">50</button>
+                    </div>
+                    <div class="avg-text" id="avgText">Promedio: --</div>
+                </div>
+            </div>
+
+            <!-- Columna derecha -->
+            <div class="right-column">
+                <div class="right-grid">
+                    <div class="glass-card flame-card" style="grid-column: span 2;">
+                        <div class="flame-icon normal" id="flameIcon">🔥</div>
+                        <div class="flame-status" id="flameStatus">Estado: Normal</div>
+                        <div style="font-size: 12px; opacity: 0.7;">Detección óptica de incendios</div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Humedad</div>
+                        <div class="val-med" id="hum-val">--<span class="unit">%</span></div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Señal RSSI</div>
+                        <div class="val-med" id="rssi-val">--<span class="unit">dBm</span></div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Estado Red</div>
+                        <div id="net-status" style="color: var(--accent-cyan);">Conexión directa con ESP32</div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-title">Barrido de Radar</div>
+                        <button id="btn-servo" class="btn-servo">DESACTIVADO</button>
+                    </div>
+
+                    <!-- Nuevos botones cuadrados (Reconectar Sistema y Resetear Alerta) -->
+                    <div class="glass-card action-square-card" style="grid-column: span 1; text-align: center; cursor: pointer;" onclick="location.reload()">
+                        <span class="action-icon">🔄</span>
+                        <div class="action-label" style="margin-top: 8px; font-weight: 500;">Reconectar Sistema</div>
+                    </div>
+                    <div class="glass-card action-square-card" style="grid-column: span 1; text-align: center; cursor: pointer;" id="resetAlertBtnSquare">
+                        <span class="action-icon">🔄</span>
+                        <div class="action-label" style="margin-top: 8px; font-weight: 500;">Resetear Alerta</div>
+                    </div>
+
+                    <!-- Panel Administración -->
+                    <div class="glass-card admin-card" id="adminCard" style="grid-column: span 2;">
+                        <div class="admin-reduced">
+                            <span class="lock-icon">🔐</span>
+                            <span class="admin-title">Panel de Admin</span>
+                            <span class="lock-icon">🔒</span>
+                        </div>
+                        <div class="admin-expanded">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <div class="card-title">CENTRO DE ADMINISTRACIÓN</div>
+                                <span id="closeAdmin" style="cursor:pointer; font-size: 24px;">&times;</span>
+                            </div>
+                            <!-- 1. Estadísticas -->
+                            <div class="admin-section open" id="secStats">
+                                <div class="admin-section-header">
+                                    <span class="admin-section-title">📊 Estadísticas del Sistema</span>
+                                    <span class="admin-section-icon">▶</span>
+                                </div>
+                                <div class="admin-section-content">
+                                    <div class="stats-grid" id="statsGrid"></div>
+                                </div>
+                            </div>
+                            <!-- 2. Acciones Rápidas -->
+                            <div class="admin-section open" id="secActions">
+                                <div class="admin-section-header">
+                                    <span class="admin-section-title">⚡ Acciones Rápidas</span>
+                                    <span class="admin-section-icon">▶</span>
+                                </div>
+                                <div class="admin-section-content">
+                                    <div class="action-blocks" id="actionBlocks"></div>
+                                </div>
+                            </div>
+                            <!-- 3. Rendimiento -->
+                            <div class="admin-section open" id="secPerf">
+                                <div class="admin-section-header">
+                                    <span class="admin-section-title">📈 Rendimiento (ms)</span>
+                                    <span class="admin-section-icon">▶</span>
+                                </div>
+                                <div class="admin-section-content">
+                                    <div class="ping-graph">
+                                        <canvas id="pingCanvas" width="400" height="80"></canvas>
+                                    </div>
+                                    <div style="text-align: center; margin-top: 5px; font-size: 10px;">
+                                        Latencia de /estado (promedio: <span id="avgPing">--</span> ms)
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 4. Actualización OTA -->
+                            <div class="admin-section open" id="secUpdate">
+                                <div class="admin-section-header">
+                                    <span class="admin-section-title">🔄 Actualización OTA</span>
+                                    <span class="admin-section-icon">▶</span>
+                                </div>
+                                <div class="admin-section-content">
+                                    <div class="action-blocks" id="updateBlocks"></div>
+                                </div>
+                            </div>
+                            <!-- 5. Logs del Sistema -->
+                            <div class="admin-section open" id="secLogs">
+                                <div class="admin-section-header">
+                                    <span class="admin-section-title">📋 Logs del Sistema</span>
+                                    <span class="admin-section-icon">▶</span>
+                                </div>
+                                <div class="admin-section-content">
+                                    <button id="toggleTimestampBtn" class="toggle-timestamp">Mostrar timestamps</button>
+                                    <div class="log-container" id="liveLogs">
+                                        <div class="log-entry log-info">→ Esperando datos...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Footer eliminado, los botones están dentro de la columna derecha -->
+    </div>
+
+    <!-- Modales y Toast -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Acceso restringido</h3>
+            <div id="modalBody">Introduce la contraseña de administrador:</div>
+            <input type="password" id="modalInput" placeholder="Contraseña">
+            <div class="modal-buttons">
+                <button id="modalConfirm">Confirmar</button>
+                <button id="modalCancel">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    <div id="toast" class="toast">Mensaje</div>
+
+    <script>
+        // ==================== SISTEMA DE TOAST Y MODAL ====================
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.color = isError ? '#F06292' : 'var(--accent-cyan)';
+            toast.style.borderColor = isError ? '#F06292' : 'var(--accent-cyan)';
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        let modalResolve = null;
+        const modal = document.getElementById('modal');
+        const modalInput = document.getElementById('modalInput');
+        const modalConfirm = document.getElementById('modalConfirm');
+        const modalCancel = document.getElementById('modalCancel');
+
+        function showPasswordModal(title, message, placeholder = 'Contraseña') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').textContent = message;
+            modalInput.placeholder = placeholder;
+            modalInput.value = '';
+            modal.style.display = 'flex';
+            modalInput.focus();
+            return new Promise((resolve) => {
+                modalResolve = resolve;
+            });
+        }
+
+        function closeModal(result) {
+            modal.style.display = 'none';
+            if (modalResolve) {
+                modalResolve(result);
+                modalResolve = null;
+            }
+        }
+
+        modalConfirm.onclick = () => closeModal(modalInput.value);
+        modalCancel.onclick = () => closeModal(null);
+        modalInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') closeModal(modalInput.value);
+        });
+
+        // ==================== VARIABLES GLOBALES ====================
+        let isDarkMode = true;
+        let dangerMode = false;
+        let emergenciaActivaPorMQTT = false;
+        let simulationActive = false;
+        let tempHistory = [];
+        let humHistory = [];
+        let currentPoints = 20;
+        let adminAuthenticated = false;
+        let adminPassword = "admin123";
+        let logsInterval = null;
+        let statsInterval = null;
+        let pingHistory = [];
+        let showTimestamps = false;
+
+        const adminCard = document.getElementById('adminCard');
+        const closeAdminBtn = document.getElementById('closeAdmin');
+
+        // ==================== FUNCIONES DE UI ====================
+        function setDangerMode(active, motivo) {
+            if (active === dangerMode) return;
+            dangerMode = active;
+            if (dangerMode) {
+                document.body.classList.add('danger-alert');
+                document.getElementById('flameIcon').classList.add('danger');
+                document.getElementById('flameIcon').classList.remove('normal');
+                document.getElementById('flameStatus').innerHTML = `⚠️ ¡PELIGRO! ${motivo || "Incendio detectado"}`;
+                document.getElementById('flameStatus').style.color = '#FF3D00';
+                addSystemLog(`🚨 ALERTA: ${motivo}`, 'alert');
+            } else {
+                document.body.classList.remove('danger-alert');
+                document.getElementById('flameIcon').classList.remove('danger');
+                document.getElementById('flameIcon').classList.add('normal');
+                document.getElementById('flameStatus').innerHTML = 'Estado: Normal';
+                document.getElementById('flameStatus').style.color = '';
+                addSystemLog(`✅ Alerta desactivada.`, 'info');
+            }
+        }
+
+        function resetAlertaForzado() {
+            emergenciaActivaPorMQTT = false;
+            setDangerMode(false, "");
+            const statusDiv = document.getElementById('net-status');
+            statusDiv.innerText = "Alerta reiniciada manualmente";
+            setTimeout(() => {
+                if (!dangerMode) statusDiv.innerText = "Conexión directa con ESP32";
+                else statusDiv.innerText = "Modo peligro activo";
+            }, 2000);
+        }
+
+        function addSystemLog(message, level = 'info') {
+            const logDiv = document.getElementById('liveLogs');
+            if (!logDiv) return;
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${level}`;
+            entry.setAttribute('title', timestamp);
+            entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${timestamp}]</span> ${message}`;
+            logDiv.prepend(entry);
+            if (logDiv.children.length > 100) logDiv.removeChild(logDiv.lastChild);
+        }
+
+        // ==================== OBTENER DATOS ====================
+        async function fetchInfo() {
+            try {
+                const res = await fetch('/info');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            } catch(e) {
+                console.error("Error en /info:", e);
+                return null;
+            }
+        }
+
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/logs');
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                return data.logs || [];
+            } catch(e) {
+                return [];
+            }
+        }
+
+        async function updateStatsUI() {
+            const info = await fetchInfo();
+            if (!info) return;
+            const sketchPercent = info.sketch_percent !== undefined ? info.sketch_percent : 45;
+            const littlefsPercent = info.littlefs_percent !== undefined ? info.littlefs_percent : 23;
+            const freePercent = 100 - (sketchPercent + littlefsPercent);
+            const sketchTotalKB = 1992;
+            const littlefsTotalKB = 128;
+            const sketchUsedKB = (sketchPercent * sketchTotalKB) / 100;
+            const littlefsUsedKB = (littlefsPercent * littlefsTotalKB) / 100;
+            const totalKB = sketchTotalKB + littlefsTotalKB;
+            const usedKB = sketchUsedKB + littlefsUsedKB;
+            const freeKB = totalKB - usedKB;
+
+            document.getElementById('statsGrid').innerHTML = `
+                <div class="stat-card"><div class="stat-label">Versión FW</div><div class="stat-value">${info.firmware || '--'}</div></div>
+                <div class="stat-card"><div class="stat-label">Tiempo Encendido</div><div class="stat-value">${formatUptime(info.uptime || 0)}</div></div>
+                <div class="stat-card">
+                    <div class="stat-label">RAM (Heap)</div>
+                    <div class="stat-value">${info.heap_percent || 0}%</div>
+                    <div class="progress-bar"><div class="progress-fill" style="width: ${info.heap_percent || 0}%"></div></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Almacenamiento Total (Flash)</div>
+                    <div class="stat-value">${Math.round(usedKB)} KB / ${totalKB} KB (${Math.round(sketchPercent + littlefsPercent)}%)</div>
+                    <div class="stacked-bar">
+                        <div class="segment-firmware" style="width: ${sketchPercent}%;" title="Firmware: ${sketchPercent}% (${sketchUsedKB.toFixed(1)} KB)"></div>
+                        <div class="segment-littlefs" style="width: ${littlefsPercent}%;" title="LittleFS: ${littlefsPercent}% (${littlefsUsedKB.toFixed(1)} KB)"></div>
+                        <div class="segment-free" style="width: ${freePercent}%;" title="Libre: ${freePercent}% (${freeKB.toFixed(1)} KB)"></div>
+                    </div>
+                    <div style="font-size: 10px; margin-top: 4px;">
+                        <span style="color: var(--color-firmware);">█ Firmware</span> 
+                        <span style="color: var(--color-littlefs);">█ LittleFS</span> 
+                        <span style="color: var(--color-free);">█ Libre</span>
+                    </div>
+                </div>
+                <div class="stat-card"><div class="stat-label">IP Hotspot</div><div class="stat-value">${info.ip_ap || '--'}</div></div>
+                <div class="stat-card"><div class="stat-label">IP Red externa</div><div class="stat-value">${info.ip_sta || '--'}</div></div>
+                <div class="stat-card"><div class="stat-label">MQTT</div><div class="stat-value">${info.mqtt_status || '--'}</div></div>
+                <div class="stat-card"><div class="stat-label">mDNS</div><div class="stat-value">${info.mdns || '--'}</div></div>
+            `;
+        }
+
+        function formatUptime(seconds) {
+            let d = Math.floor(seconds / 86400);
+            let h = Math.floor((seconds % 86400) / 3600);
+            let m = Math.floor((seconds % 3600) / 60);
+            let s = seconds % 60;
+            return `${d}d ${h}h ${m}m ${s}s`;
+        }
+
+        // ==================== COMANDOS (con toasts) ====================
+        async function sendCommand(cmd) {
+            addSystemLog(`Comando enviado: ${cmd}`, 'info');
+            try {
+                const res = await fetch(`/cmd?action=${cmd}`);
+                const text = await res.text();
+                if (cmd === 'restart') {
+                    showToast("Reiniciando ESP32...");
+                    setTimeout(() => location.reload(), 3000);
+                } else if (cmd === 'check_ota') {
+                    showToast("Comprobando actualizaciones...");
+                } else if (cmd === 'toggle_sim') {
+                    simulationActive = !simulationActive;
+                    addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn');
+                    showToast(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`);
+                } else if (cmd === 'clear_logs') {
+                    document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">Logs limpiados localmente</div>';
+                    showToast("Logs locales limpiados");
+                } else if (cmd === 'update_fw') {
+                    showToast("Iniciando actualización de firmware...");
+                } else if (cmd === 'update_html') {
+                    if (res.ok) {
+                        showToast("HTML actualizado. La página se recargará.");
+                        setTimeout(() => {
+                            window.location.href = window.location.pathname + '?v=' + Date.now();
+                        }, 1000);
+                    } else {
+                        showToast("Error al actualizar el HTML", true);
+                    }
+                } else {
+                    showToast(`Comando ${cmd} ejecutado`);
+                }
+            } catch(e) {
+                console.error(e);
+                addSystemLog(`Error al ejecutar ${cmd}`, 'error');
+                showToast(`Error al ejecutar ${cmd}`, true);
+            }
+        }
+
+        function buildActionBlocks(containerId, actionsList) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+            actionsList.forEach(action => {
+                const block = document.createElement('div');
+                block.className = 'action-block';
+                block.innerHTML = `<span class="action-icon">${action.icon}</span><span class="action-label">${action.label}</span>`;
+                block.addEventListener('click', () => sendCommand(action.cmd));
+                container.appendChild(block);
+            });
+        }
+
+        const actions = [
+            { icon: "🔄", label: "Reiniciar ESP32", cmd: "restart" },
+            { icon: "🔍", label: "Comprobar Actualización", cmd: "check_ota" },
+            { icon: "🔥", label: "Simulación fuego", cmd: "toggle_sim" },
+            { icon: "🗑", label: "Limpiar logs", cmd: "clear_logs" }
+        ];
+        const updateActions = [
+            { icon: "📡", label: "Actualizar Firmware", cmd: "update_fw" },
+            { icon: "🌐", label: "Actualizar HTML", cmd: "update_html" }
+        ];
+
+        // ==================== PING ====================
+        async function measurePing() {
+            if (!adminAuthenticated) return;
+            let start = performance.now();
+            try {
+                await fetch('/estado', { method: 'HEAD' });
+                let duration = performance.now() - start;
+                pingHistory.push(duration);
+                if (pingHistory.length > 20) pingHistory.shift();
+                drawPingGraph();
+                let avg = pingHistory.reduce((a,b)=>a+b,0)/pingHistory.length;
+                document.getElementById('avgPing').innerText = avg.toFixed(1);
+            } catch(e) {}
+        }
+        function drawPingGraph() {
+            const canvas = document.getElementById('pingCanvas');
+            if (!canvas) return;
+            const w = canvas.clientWidth;
+            const h = 80;
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, w, h);
+            if (pingHistory.length < 2) return;
+            const step = w / (pingHistory.length - 1);
+            ctx.beginPath();
+            ctx.strokeStyle = "#7AF0D4";
+            ctx.lineWidth = 2;
+            for (let i=0; i<pingHistory.length; i++) {
+                let x = i * step;
+                let y = h - (pingHistory[i] / 200) * h;
+                if (y < 0) y = 0;
+                if (i===0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        // ==================== ADMIN PANEL (con modal) ====================
+        async function expandAdmin() {
+            if (!adminAuthenticated) {
+                const pwd = await showPasswordModal("Acceso restringido", "Introduce la contraseña de administrador:", "Contraseña");
+                if (pwd === adminPassword) {
+                    adminAuthenticated = true;
+                    adminCard.classList.add('expanded');
+                    startAdminServices();
+                    addSystemLog("🔓 Acceso concedido al panel de administración.", 'info');
+                    showToast("Acceso concedido");
+                } else if (pwd !== null) {
+                    showToast("Contraseña incorrecta", true);
+                }
+                return;
+            } else {
+                adminCard.classList.add('expanded');
+                startAdminServices();
+            }
+        }
+        function collapseAdmin() {
+            adminCard.classList.remove('expanded');
+            if (logsInterval) clearInterval(logsInterval);
+            if (statsInterval) clearInterval(statsInterval);
+            logsInterval = null;
+            statsInterval = null;
+        }
+        async function updateLogsUI() {
+            if (!adminAuthenticated) return;
+            const logs = await fetchLogs();
+            const logDiv = document.getElementById('liveLogs');
+            if (!logDiv) return;
+            if (logs.length === 0) {
+                logDiv.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>';
+                return;
+            }
+            logDiv.innerHTML = '';
+            logs.slice().reverse().forEach(log => {
+                const t = new Date(log.timestamp).toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry log-${log.level}`;
+                entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
+                logDiv.appendChild(entry);
+            });
+        }
+        function startAdminServices() {
+            if (logsInterval) clearInterval(logsInterval);
+            if (statsInterval) clearInterval(statsInterval);
+            updateStatsUI();
+            updateLogsUI();
+            statsInterval = setInterval(() => { if (adminAuthenticated) updateStatsUI(); }, 5000);
+            logsInterval = setInterval(() => { if (adminAuthenticated) updateLogsUI(); }, 3000);
+            setInterval(measurePing, 5000);
+            measurePing();
+        }
+
+        // ==================== GRÁFICO SVG ====================
+        function drawSVG() {
+            const pointsCount = Math.min(tempHistory.length, currentPoints);
+            if (pointsCount < 2) return;
+            const temps = tempHistory.slice(-pointsCount);
+            const hums = humHistory.slice(-pointsCount);
+            let maxTemp = Math.max(...temps, 35);
+            let minTemp = Math.min(...temps, 15);
+            let maxHum = Math.max(...hums, 80);
+            let minHum = Math.min(...hums, 20);
+            maxTemp += (maxTemp - minTemp) * 0.1;
+            minTemp -= (maxTemp - minTemp) * 0.1;
+            maxHum += (maxHum - minHum) * 0.1;
+            minHum -= (maxHum - minHum) * 0.1;
+            if (minTemp < 0) minTemp = 0;
+            if (minHum < 0) minHum = 0;
+            const graphLeft = 40, graphRight = 560, graphWidth = graphRight - graphLeft;
+            const graphTop = 15, graphBottom = 160, graphHeight = graphBottom - graphTop;
+            let tempPoints = '', humPoints = '';
+            const stepX = graphWidth / (pointsCount - 1);
+            for (let i = 0; i < pointsCount; i++) {
+                const x = graphLeft + i * stepX;
+                const yTemp = graphBottom - ((temps[i] - minTemp) / (maxTemp - minTemp)) * graphHeight;
+                const yHum = graphBottom - ((hums[i] - minHum) / (maxHum - minHum)) * graphHeight;
+                tempPoints += `${x},${yTemp} `;
+                humPoints += `${x},${yHum} `;
+            }
+            document.getElementById('tempLine').setAttribute('points', tempPoints);
+            document.getElementById('humLine').setAttribute('points', humPoints);
+            const avgTemp = (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1);
+            const avgHum = (hums.reduce((a,b)=>a+b,0)/hums.length).toFixed(0);
+            document.getElementById('avgText').innerHTML = `📊 Promedio (últimos ${currentPoints}): Temp ${avgTemp}°C / Hum ${avgHum}%`;
+        }
+        function addDataPoint(temp, hum) {
+            tempHistory.push(temp);
+            humHistory.push(hum);
+            if (tempHistory.length > 200) { tempHistory.shift(); humHistory.shift(); }
+            drawSVG();
+        }
+        function actualizarTemperatura(temp) {
+            const tempVal = parseFloat(temp);
+            document.getElementById('temp-val').innerHTML = `${tempVal.toFixed(1)}<span class="unit">°C</span>`;
+            let altura = Math.min(100, tempVal * 2);
+            document.getElementById('bar-temp').style.height = altura + '%';
+            let desc = '';
+            if (tempVal < 20) desc = 'Ambiente fresco';
+            else if (tempVal < 30) desc = 'Temperatura normal';
+            else if (tempVal < 40) desc = 'Calor elevado';
+            else desc = '¡PELIGRO! Calor extremo';
+            document.getElementById('desc-val').innerText = desc;
+            if (!dangerMode && tempVal >= 40.0 && !emergenciaActivaPorMQTT) setDangerMode(true, "Temperatura crítica > 40°C");
+            else if (dangerMode && !emergenciaActivaPorMQTT && tempVal < 38.0) setDangerMode(false, "");
+        }
+        function actualizarHumedad(hum) {
+            const humVal = parseFloat(hum);
+            document.getElementById('hum-val').innerHTML = `${Math.round(humVal)}<span class="unit">%</span>`;
+            document.getElementById('bar-hum').style.height = Math.min(100, humVal) + '%';
+        }
+        function actualizarRSSI(rssi) {
+            const el = document.getElementById('rssi-val');
+            el.innerHTML = `${rssi}<span class="unit">dBm</span>`;
+            if (rssi > -60) el.style.color = '#81C784';
+            else if (rssi > -75) el.style.color = '#FFD54F';
+            else el.style.color = '#F06292';
+        }
+        async function fetchEstado() {
+            try {
+                const response = await fetch('/estado');
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                actualizarTemperatura(data.temp);
+                actualizarHumedad(data.hum);
+                actualizarRSSI(data.rssi);
+                addDataPoint(data.temp, data.hum);
+                document.getElementById('esp-status').innerText = 'Online';
+            } catch(err) {
+                console.log("Error fetchEstado:", err);
+                document.getElementById('esp-status').innerText = 'Error';
+            }
+        }
+        function toggleServo() {
+            const btn = document.getElementById('btn-servo');
+            btn.innerText = "ENVIANDO...";
+            btn.style.opacity = "0.7";
+            fetch('/toggleServo').then(res => res.text()).then(state => {
+                btn.style.opacity = "1";
+                if (state === "ON") {
+                    btn.classList.add('active');
+                    btn.innerText = "SISTEMA ACTIVO";
+                    addSystemLog("🔁 Servo activado.", 'info');
+                } else {
+                    btn.classList.remove('active');
+                    btn.innerText = "DESACTIVADO";
+                    addSystemLog("🔁 Servo desactivado.", 'info');
+                }
+            }).catch(() => {
+                btn.classList.remove('active');
+                btn.style.opacity = "1";
+                btn.innerText = "SIN CONEXIÓN";
+                setTimeout(() => btn.innerText = "DESACTIVADO", 3000);
+                addSystemLog("❌ Error en comando del servo.", 'error');
+            });
+        }
+
+        // ==================== INICIALIZACIÓN ====================
+        document.querySelectorAll('.range-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentPoints = parseInt(btn.getAttribute('data-points'), 10);
+                drawSVG();
+            });
+        });
+        document.querySelector('.range-btn[data-points="20"]').classList.add('active');
+        // Botón "Resetear Alerta" cuadrado
+        document.getElementById('resetAlertBtnSquare').addEventListener('click', resetAlertaForzado);
+        document.getElementById('btn-servo').addEventListener('click', toggleServo);
+
+        const themeBtn = document.getElementById('theme-toggle');
+        themeBtn.onclick = () => {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('light-mode');
+            themeBtn.innerText = isDarkMode ? '✳' : '☀️';
+            initParticles();
+        };
+
+        // Partículas
+        const canvasBg = document.getElementById('weather-canvas');
+        const ctxBg = canvasBg.getContext('2d');
+        let particles = [];
+        function resizeBg() { canvasBg.width = window.innerWidth; canvasBg.height = window.innerHeight; }
+        window.onresize = resizeBg; resizeBg();
+        class Particle {
+            constructor() { this.reset(); }
+            reset() { this.x = Math.random() * canvasBg.width; this.y = Math.random() * canvasBg.height; this.size = Math.random() * 2 + 1; this.alpha = Math.random(); this.speed = Math.random() * 0.02; }
+            update() { this.alpha += this.speed; if(this.alpha > 1 || this.alpha < 0) this.speed *= -1; }
+            draw() { ctxBg.fillStyle = isDarkMode ? `rgba(234,226,209,${this.alpha*0.2})` : `rgba(11,57,84,${this.alpha*0.1})`; ctxBg.beginPath(); ctxBg.arc(this.x, this.y, this.size, 0, Math.PI*2); ctxBg.fill(); }
+        }
+        function initParticles() { particles = []; for(let i=0;i<60;i++) particles.push(new Particle()); }
+        function animateBg() { ctxBg.clearRect(0,0,canvasBg.width,canvasBg.height); particles.forEach(p=>{p.update(); p.draw();}); requestAnimationFrame(animateBg); }
+        initParticles(); animateBg();
+
+        // Admin panel eventos
+        adminCard.addEventListener('click', (e) => {
+            if (e.target === closeAdminBtn || e.target.parentElement === closeAdminBtn) { collapseAdmin(); return; }
+            if (!adminCard.classList.contains('expanded')) expandAdmin();
+        });
+        // Acordeón: solo una sección abierta
+        document.querySelectorAll('.admin-section-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const currentSection = header.closest('.admin-section');
+                if (!currentSection) return;
+                const isCurrentlyOpen = currentSection.classList.contains('open');
+                document.querySelectorAll('.admin-section').forEach(section => {
+                    section.classList.remove('open');
+                });
+                if (!isCurrentlyOpen) currentSection.classList.add('open');
+            });
+        });
+        document.getElementById('toggleTimestampBtn')?.addEventListener('click', () => {
+            showTimestamps = !showTimestamps;
+            document.querySelectorAll('.log-timestamp').forEach(span => {
+                if (showTimestamps) span.classList.add('visible');
+                else span.classList.remove('visible');
+            });
+            document.getElementById('toggleTimestampBtn').innerText = showTimestamps ? "Ocultar timestamps" : "Mostrar timestamps";
+        });
+        buildActionBlocks('actionBlocks', actions);
+        buildActionBlocks('updateBlocks', updateActions);
+
+        fetchEstado();
+        setInterval(fetchEstado, 2000);
+        addSystemLog("🚀 Página cargada. Panel administración listo.", 'info');
+    </script>
+</body>
+</html>

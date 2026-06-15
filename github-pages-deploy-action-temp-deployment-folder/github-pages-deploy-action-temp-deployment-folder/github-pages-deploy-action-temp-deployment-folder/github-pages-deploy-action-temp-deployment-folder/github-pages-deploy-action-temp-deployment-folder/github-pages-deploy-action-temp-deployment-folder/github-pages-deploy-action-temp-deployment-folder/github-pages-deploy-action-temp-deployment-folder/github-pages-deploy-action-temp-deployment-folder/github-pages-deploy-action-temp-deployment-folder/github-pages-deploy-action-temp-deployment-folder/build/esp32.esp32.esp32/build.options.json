@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "../..",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "",
+  "fqbn": "esp32:esp32:esp32",
+  "hardwareFolders": "/home/runner/.arduino15/packages/esp32/hardware/esp32/3.3.10,/home/runner/.arduino15/packages/esp32/hardware/esp32/3.3.10",
+  "otherLibrariesFolders": "/home/runner/Arduino/libraries",
+  "sketchLocation": "/home/runner/work/fxi-dashboard/fxi-dashboard"
+}
