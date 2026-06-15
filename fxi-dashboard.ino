@@ -89,7 +89,7 @@ bool emergenciaActiva = false;
 // ==================== UMBRALES DINÁMICOS ====================
 float dangerTempThreshold = 40.0;       // temperatura peligrosa
 float umbralDesactivacionFuego = 35.0;  // para desactivar emergencia MQTT
-int umbralGas = 250;                    // gas (ppm)  <-- NUEVO: ahora es variable
+int umbralGas = 250;                    // gas (ppm)
 const int UMBRAL_FUEGO = 500;           // llama (fijo)
 
 // Archivo de umbrales en LittleFS
@@ -98,7 +98,6 @@ const char* THRESHOLD_FILE = "/umbrales.txt";
 bool loadThresholds() {
   File f = LittleFS.open(THRESHOLD_FILE, "r");
   if (!f) {
-    // Valores por defecto
     dangerTempThreshold = 40.0;
     umbralDesactivacionFuego = 35.0;
     umbralGas = 250;
@@ -142,7 +141,7 @@ bool simularFuego = false;
 int llamaIzq = 4095;
 int llamaDer = 4095;
 
-// ==================== BUZZER (sin cambios) ====================
+// ==================== BUZZER ====================
 const int BEEPS_PER_CYCLE = 3;
 const unsigned long BEEP_ON_MS = 150;
 const unsigned long BEEP_OFF_MS = 150;
@@ -257,24 +256,49 @@ void guardarVersion(String version) {
   File f = LittleFS.open("/version.txt", "w");
   if (f) { f.print(version); f.close(); }
 }
+
 String leerVersion() {
   File f = LittleFS.open("/version.txt", "r");
   if (!f) return "AUTO_VERSION";
   String v = f.readString(); v.trim(); f.close(); return v;
 }
+
+// Función actualizarHTML CORREGIDA (sigue redirecciones)
 bool actualizarHTML() {
-  if (WiFi.status() != WL_CONNECTED) return false;
-  HTTPClient http; http.setTimeout(10000); http.begin(espClient, urlHTML);
+  if (WiFi.status() != WL_CONNECTED) {
+    addLog("error", "HTML: sin WiFi");
+    return false;
+  }
+  addLog("info", "Descargando HTML desde GitHub...");
+  HTTPClient http;
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);  // sigue redirecciones
+  http.setTimeout(15000);
+  http.begin(espClient, urlHTML);
   int httpCode = http.GET();
-  if (httpCode == HTTP_CODE_OK) {
+  if (httpCode == HTTP_CODE_OK || httpCode == 302 || httpCode == 301) {
     String nuevoHTML = http.getString();
     http.end();
-    if (nuevoHTML.length() < 100) return false;
+    if (nuevoHTML.length() < 100) {
+      addLog("error", "HTML descargado muy pequeño: " + String(nuevoHTML.length()) + " bytes");
+      return false;
+    }
     File f = LittleFS.open("/index.html", "w");
-    if (f) { f.print(nuevoHTML); f.close(); addLog("info", "HTML actualizado"); return true; }
-  } else { http.end(); }
-  return false;
+    if (f) {
+      f.print(nuevoHTML);
+      f.close();
+      addLog("info", "HTML actualizado (" + String(nuevoHTML.length()) + " bytes)");
+      return true;
+    } else {
+      addLog("error", "No se pudo abrir /index.html para escritura");
+      return false;
+    }
+  } else {
+    addLog("error", "Error HTTP al descargar HTML: " + String(httpCode));
+    http.end();
+    return false;
+  }
 }
+
 bool isNewerVersion(String remote, String current) {
   remote.replace("v", ""); current.replace("v", "");
   int rMaj, rMin, rPat, cMaj, cMin, cPat;
@@ -286,6 +310,7 @@ bool isNewerVersion(String remote, String current) {
   if (rMin < cMin) return false;
   return (rPat > cPat);
 }
+
 void chequearActualizacionGitHub() {
   if (WiFi.status() != WL_CONNECTED) return;
   HTTPClient http; http.setTimeout(10000); http.begin(espClient, urlVersion);
@@ -349,7 +374,7 @@ void processAdminCommand(int id, const String &action, DynamicJsonDocument *extr
     if (extraData) {
       if ((*extraData).containsKey("dangerTemp")) dangerTempThreshold = (*extraData)["dangerTemp"];
       if ((*extraData).containsKey("fireMqtt")) umbralDesactivacionFuego = (*extraData)["fireMqtt"];
-      if ((*extraData).containsKey("gasLimit")) umbralGas = (*extraData)["gasLimit"];  // NUEVO
+      if ((*extraData).containsKey("gasLimit")) umbralGas = (*extraData)["gasLimit"];
       saveThresholds();
       DynamicJsonDocument empty(64);
       respondAdminCommand(id, true, empty);
@@ -406,7 +431,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         DynamicJsonDocument data(64);
         data["dangerTemp"] = doc["dangerTemp"] | dangerTempThreshold;
         data["fireMqtt"] = doc["fireMqtt"] | umbralDesactivacionFuego;
-        data["gasLimit"] = doc["gasLimit"] | umbralGas;  // NUEVO
+        data["gasLimit"] = doc["gasLimit"] | umbralGas;
         processAdminCommand(doc["id"], action, &data);
       } else {
         processAdminCommand(doc["id"], action);
@@ -441,15 +466,9 @@ void handleToggle() {
 }
 
 void handleSetThresholds() {
-  if (server.hasArg("dangerTemp")) {
-    dangerTempThreshold = server.arg("dangerTemp").toFloat();
-  }
-  if (server.hasArg("fireMqtt")) {
-    umbralDesactivacionFuego = server.arg("fireMqtt").toFloat();
-  }
-  if (server.hasArg("gasLimit")) {                // NUEVO
-    umbralGas = server.arg("gasLimit").toInt();
-  }
+  if (server.hasArg("dangerTemp")) dangerTempThreshold = server.arg("dangerTemp").toFloat();
+  if (server.hasArg("fireMqtt")) umbralDesactivacionFuego = server.arg("fireMqtt").toFloat();
+  if (server.hasArg("gasLimit")) umbralGas = server.arg("gasLimit").toInt();
   saveThresholds();
   addLog("info", "Umbrales actualizados vía HTTP");
   server.send(200, "text/plain", "OK");
@@ -551,7 +570,7 @@ void setup() {
     addLog("error", "LittleFS no disponible"); return;
   }
   FIRMWARE_VERSION = leerVersion();
-  loadThresholds();   // Cargar umbrales (incluye gas)
+  loadThresholds();
 
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAPConfig(apIP, apGateway, apSubnet);
@@ -585,7 +604,6 @@ void setup() {
   server.onNotFound(handleNotFound);
   server.begin();
 
-  // Lectura inicial rápida
   for (int i = 0; i < 2 && (isnan(tempGuardada) || isnan(humGuardada)); i++) {
     tempGuardada = dht.readTemperature();
     humGuardada = dht.readHumidity();
@@ -593,7 +611,7 @@ void setup() {
   }
 }
 
-// ==================== LOOP PRINCIPAL OPTIMIZADO ====================
+// ==================== LOOP PRINCIPAL (24/7) ====================
 void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
@@ -618,7 +636,6 @@ void loop() {
 
   unsigned long ahora = millis();
 
-  // ========== LECTURA DE SENSORES (cada 1000 ms) ==========
   if (ahora - ultimoTiempoDHT >= 1000) {
     float t = dht.readTemperature();
     float h = dht.readHumidity();
@@ -632,7 +649,6 @@ void loop() {
   gasValue = analogRead(PIN_MQ2);
   rssiGuardado = WiFi.RSSI();
 
-  // ========== PUBLICACIONES CONTINUAS PARA EL HTML ==========
   if (client.connected()) {
     client.publish("fxi/flama1", (llamaIzq < UMBRAL_FUEGO) ? "ON" : "OFF");
     client.publish("fxi/flama2", (llamaDer < UMBRAL_FUEGO) ? "ON" : "OFF");
@@ -641,11 +657,11 @@ void loop() {
     client.publish("fxi/angulo", String(angulo).c_str());
   }
 
-  // ========== LÓGICA DE EMERGENCIA (usa umbral dinámico de gas) ==========
+  // Detección 24/7
   if (estadoActual == REPOSO && !emergenciaActiva) {
     bool fuegoIzq = (llamaIzq < UMBRAL_FUEGO);
     bool fuegoDer = (llamaDer < UMBRAL_FUEGO);
-    bool hayGas = (gasValue > umbralGas);                         // <-- aquí se usa el umbral de gas configurable
+    bool hayGas = (gasValue > umbralGas);
     bool calorCritico = (!isnan(tempGuardada) && tempGuardada >= dangerTempThreshold);
 
     if (simularFuego || calorCritico || hayGas || fuegoIzq || fuegoDer) {
@@ -660,22 +676,16 @@ void loop() {
     emergenciaEnviada = false;
   }
 
-  // ========== LED Y BUZZER ==========
+  // LED y buzzer
   if (estadoActual != REPOSO) {
     setColor(255, 0, 0); updateBuzzer();
   } else {
     noTone(PIN_BUZZER); buzzerState = false;
-    if (!isnan(tempGuardada) && tempGuardada >= 35.0) {
-      setColor(255, 0, 0);
-    } else if (WiFi.status() == WL_CONNECTED) {
-      if (client.connected()) setColor(0, 255, 0);
-      else setColor(255, 255, 0);
-    } else {
-      setColor(0, 255, 255);
-    }
+    if (!isnan(tempGuardada) && tempGuardada >= 35.0) setColor(255, 0, 0);
+    else if (WiFi.status() == WL_CONNECTED) setColor(client.connected() ? 0x00FF00 : 0xFFFF00);
+    else setColor(0x00FFFF);
   }
 
-  // ========== MÁQUINA DE EXTINCIÓN ==========
   switch (estadoActual) {
     case ESPERANDO_AGUA:
       if (ahora - cronometroRutina >= WATER_DELAY_MS) {
@@ -688,7 +698,6 @@ void loop() {
       break;
   }
 
-  // ========== PUBLICACIÓN PERIÓDICA RÁPIDA ==========
   if (WiFi.status() == WL_CONNECTED && client.connected()) {
     if (ahora - cronometroDatos >= 1000) {
       cronometroDatos = ahora;
@@ -703,13 +712,14 @@ void loop() {
     }
   }
 
-  // ========== OTA programada ==========
   if (ahora - ultimoChequeoOTA >= INTERVALO_OTA) {
     ultimoChequeoOTA = ahora; chequearActualizacionGitHub();
   }
-a
+
+  // Actualización diaria del HTML (si hay internet)
   static unsigned long ultimaActualizacionHTML = 0;
   if (ahora - ultimaActualizacionHTML >= 86400000UL && WiFi.status() == WL_CONNECTED) {
-    actualizarHTML(); ultimaActualizacionHTML = ahora;
+    actualizarHTML();
+    ultimaActualizacionHTML = ahora;
   }
 }
