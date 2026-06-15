@@ -10,7 +10,6 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        /* ==================== BASE OPTIMIZADA ==================== */
         :root {
             --bg-start: #0B3954;
             --bg-end: #061A2B;
@@ -281,12 +280,6 @@
         #coverageSVG { width: 200px; height: 200px; display: block; margin: 0 auto; }
         .sweep-active { animation: radarSweep 2s linear infinite; }
         @keyframes radarSweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .pump-active { animation: pumpPulse 0.8s ease-in-out infinite; }
-        @keyframes pumpPulse {
-            0%   { transform: rotate(var(--servo-rotation, 0deg)) scale(1); }
-            50%  { transform: rotate(var(--servo-rotation, 0deg)) scale(1.05); }
-            100% { transform: rotate(var(--servo-rotation, 0deg)) scale(1); }
-        }
         .sector-fire { fill: rgba(255, 61, 0, 0.8) !important; animation: fireGlow 0.5s infinite alternate; }
         @keyframes fireGlow { from { fill: rgba(255, 61, 0, 0.7); } to { fill: rgba(255, 160, 0, 0.9); } }
     </style>
@@ -337,11 +330,12 @@
                     <div style="font-size: 11px; opacity: 0.7;">Detección óptica de incendios</div>
                 </div>
 
+                <!-- Tarjeta de cobertura (sin rotación, sin texto KY‑026) -->
                 <div class="glass-card" id="coverageCard">
-                    <div class="card-title">📡 Campo de visión (KY‑026 ×2)</div>
+                    <div class="card-title">📡 Campo de visión</div>
                     <svg id="coverageSVG" viewBox="-120 -120 240 240">
                         <circle cx="0" cy="0" r="110" fill="none" stroke="var(--glass-border)" stroke-width="2"/>
-                        <g id="rotatingGroup" style="transform-origin: 0px 0px; transition: transform 0.1s linear;">
+                        <g id="rotatingGroup" style="transform-origin: 0px 0px;">
                             <path id="sector1" d="M 0 0 L -55 -95 A 110 110 0 0 1 55 -95 Z"
                                   fill="rgba(122,240,212,0.25)" stroke="var(--accent-cyan)" stroke-width="1.5"
                                   style="transition: fill 0.2s;"/>
@@ -554,7 +548,6 @@
                 rangeButtons: document.getElementById('rangeButtons'),
                 downloadBtn: document.getElementById('downloadBtn'),
                 sweepLine: document.getElementById('sweepLine'),
-                rotatingGroup: document.getElementById('rotatingGroup'),
                 sector1: document.getElementById('sector1'),
                 sector2: document.getElementById('sector2'),
                 bombaIcon: document.getElementById('bombaIcon'),
@@ -624,11 +617,11 @@
             let animationId = null;
             let bgEnabled = true;
             let potatoMode = false, previousBgEnabled = true;
-            let lastSvgDrawTime = 0, SVG_THROTTLE = 500;
+            let lastSvgDrawTime = 0, SVG_THROTTLE = 0;
             let lastPotatoDataUpdate = 0;
             let watchMode = false;
 
-            let servoAngle = 90, flama1Active = false, flama2Active = false, bombaActive = false;
+            let flama1Active = false, flama2Active = false, bombaActive = false;
 
             function showToast(msg, isError = false) {
                 if (potatoMode && !isError) return;
@@ -667,17 +660,22 @@
             }
 
             function evaluateSensorData(data) {
-                if (emergenciaActivaMQTT) return; // MQTT emergency takes precedence
                 const llamaIzq = parseInt(data.llama_izq);
                 const llamaDer = parseInt(data.llama_der);
                 const gasVal = parseInt(data.gas);
 
-                if (!isNaN(llamaIzq) && llamaIzq < UMBRAL_LLAMA) {
-                    setDangerMode(true, "FUEGO IZQUIERDO (KY-026)");
-                } else if (!isNaN(llamaDer) && llamaDer < UMBRAL_LLAMA) {
-                    setDangerMode(true, "FUEGO DERECHO (KY-026)");
-                } else if (!isNaN(gasVal) && gasVal > UMBRAL_GAS_HTTP) {
-                    setDangerMode(true, "GAS COMBUSTIBLE DETECTADO (MQ-2)");
+                // Activar peligro si algún sensor excede el umbral
+                if ((!isNaN(llamaIzq) && llamaIzq < UMBRAL_LLAMA) ||
+                    (!isNaN(llamaDer) && llamaDer < UMBRAL_LLAMA) ||
+                    (!isNaN(gasVal) && gasVal > UMBRAL_GAS_HTTP)) {
+                    if (!dangerMode && !emergenciaActivaMQTT) {
+                        setDangerMode(true, "Incendio detectado");
+                    }
+                } else {
+                    // Si no hay ninguna alarma local y no hay emergencia MQTT activa, desactivar peligro
+                    if (dangerMode && !emergenciaActivaMQTT) {
+                        setDangerMode(false, "");
+                    }
                 }
             }
 
@@ -727,7 +725,7 @@
                     document.body.classList.add('danger-alert');
                     dom.flameIcon.classList.add('danger');
                     dom.flameIcon.classList.remove('normal');
-                    dom.flameStatus.innerHTML = `⚠️ ¡PELIGRO! ${motivo}`;
+                    dom.flameStatus.innerHTML = `⚠️ ¡PELIGRO! ${motivo || 'Incendio detectado'}`;
                     dom.flameStatus.style.color = '#FF3D00';
                     addSystemLog(`🚨 ALERTA: ${motivo}`, 'alert');
                     startAlarm();
@@ -737,9 +735,10 @@
                     dom.flameIcon.classList.add('normal');
                     dom.flameStatus.innerHTML = 'Estado: Normal';
                     dom.flameStatus.style.color = '';
-                    addSystemLog(`✅ Alerta desactivada.`, 'info');
+                    addSystemLog('✅ Alerta desactivada.', 'info');
                     stopAlarm();
                 }
+                // No modificar el estado de red (netStatus)
             }
             function resetAlertaForzado() {
                 emergenciaActivaMQTT = false;
@@ -750,6 +749,19 @@
                 }
                 dom.netStatus.innerText = "Alerta reiniciada";
                 showToast("Alerta reseteada");
+                // Restaurar estado de red tras un breve lapso
+                setTimeout(() => {
+                    if (currentMode === 'mqtt' && mqttConnected) {
+                        dom.netStatus.innerHTML = 'MQTT: Conectado';
+                        dom.netStatus.style.color = 'var(--text-sec)';
+                    } else if (currentMode === 'http') {
+                        dom.netStatus.innerHTML = 'HTTP: Conectado';
+                        dom.netStatus.style.color = 'var(--text-sec)';
+                    } else {
+                        dom.netStatus.innerHTML = '--';
+                        dom.netStatus.style.color = 'var(--text-sec)';
+                    }
+                }, 2000);
             }
             function addSystemLog(message, level = 'info') {
                 if (potatoMode || !dom.liveLogs) return;
@@ -796,9 +808,6 @@
             }
             function throttledSVGUpdate() {
                 if (potatoMode || watchMode) return;
-                const now = performance.now();
-                if (now - lastSvgDrawTime < SVG_THROTTLE) return;
-                lastSvgDrawTime = now;
                 drawSVGNow();
             }
             function addDataPoint(temp, hum, gas) {
@@ -820,15 +829,23 @@
                 else if (tempVal < dangerTempThreshold) desc = 'Calor elevado';
                 else desc = '¡PELIGRO! Calor extremo';
                 dom.descVal.innerText = desc;
+                // Lógica de desactivación por temperatura (independiente)
                 if (dangerMode) {
                     if (emergenciaActivaMQTT) {
-                        if (tempVal < UMBRAL_DESACTIVACION_FUEGO) { setDangerMode(false, ""); emergenciaActivaMQTT = false; }
+                        if (tempVal < UMBRAL_DESACTIVACION_FUEGO) {
+                            setDangerMode(false, "");
+                            emergenciaActivaMQTT = false;
+                        }
                     } else {
-                        if (tempVal < UMBRAL_DESACTIVACION_CRITICA) setDangerMode(false, "");
+                        if (tempVal < UMBRAL_DESACTIVACION_CRITICA && !emergenciaActivaMQTT) {
+                            // Solo desactiva si la temperatura baja, pero los sensores podrían seguir en fuego
+                            // La evaluación de sensores se encarga de reactivar si es necesario
+                            // Para evitar parpadeo, no desactivamos aquí; dejamos que evaluateSensorData maneje el apagado.
+                        }
                     }
                 }
                 if (!dangerMode && tempVal >= dangerTempThreshold && !emergenciaActivaMQTT) {
-                    setDangerMode(true, "Temperatura crítica > " + dangerTempThreshold + "°C");
+                    setDangerMode(true, "Temperatura crítica");
                 }
             }
             function actualizarHumedad(hum) {
@@ -852,14 +869,6 @@
                 dom.barGas.style.height = Math.min(100, gasVal / 20) + '%';
             }
 
-            function updateServoAngle(angle) {
-                servoAngle = angle;
-                const rotation = angle - 90;
-                dom.rotatingGroup.style.setProperty('--servo-rotation', rotation + 'deg');
-                if (!bombaActive) {
-                    dom.rotatingGroup.style.transform = `rotate(${rotation}deg)`;
-                }
-            }
             function actualizarFlama(sensorNum, active) {
                 if (sensorNum === 1) {
                     flama1Active = active;
@@ -875,13 +884,6 @@
                 bombaActive = active;
                 dom.bombaStatus.textContent = active ? 'ON' : 'OFF';
                 dom.bombaIcon.style.opacity = active ? '1' : '0';
-                if (active) {
-                    dom.rotatingGroup.classList.add('pump-active');
-                } else {
-                    dom.rotatingGroup.classList.remove('pump-active');
-                    const rotation = servoAngle - 90;
-                    dom.rotatingGroup.style.transform = `rotate(${rotation}deg)`;
-                }
             }
 
             function downloadCSV() {
@@ -976,11 +978,10 @@
                     mqttClient.subscribe('fxi/simular');
                     mqttClient.subscribe('fxi/admin/resp');
                     mqttClient.subscribe('fxi/logs');
-                    mqttClient.subscribe('fxi/angulo');
                     mqttClient.subscribe('fxi/flama1');
                     mqttClient.subscribe('fxi/flama2');
                     mqttClient.subscribe('fxi/bomba');
-                    addSystemLog("✅ MQTT conectado a HiveMQ Cloud", 'info');
+                    addSystemLog("✅ MQTT conectado", 'info');
                     if (forcedMode !== 'http') setMode('mqtt');
                 });
                 mqttClient.on('message', (topic, payload) => {
@@ -997,30 +998,20 @@
                             if (data.hum !== undefined) actualizarHumedad(data.hum);
                             if (data.gas !== undefined) actualizarGas(data.gas);
                             addDataPoint(data.temp, data.hum, data.gas);
-                            // *** NUEVO: evaluar sensores también en MQTT ***
                             if (currentMode === 'mqtt') evaluateSensorData(data);
                         } else if (topic === 'fxi/rssi') {
                             const data = JSON.parse(msg);
                             if (data.rssi !== undefined) actualizarRSSI(data.rssi);
                         } else if (topic === 'fxi/emergencia') {
-                            const data = JSON.parse(msg);
-                            const motivo = data.motivo || "Incendio detectado";
-                            if (motivo.includes("AUMENTO") || motivo.includes("sospechoso")) return;
-                            setDangerMode(true, motivo);
+                            // Al recibir emergencia por MQTT, activar modo peligro sin texto de sensor
+                            setDangerMode(true, "Incendio detectado");
                             emergenciaActivaMQTT = true;
-                            if (Notification.permission === "granted") new Notification("🚨 ALERTA FLUXA IGNIS", { body: motivo });
-                            dom.netStatus.innerHTML = "🔴 ¡EMERGENCIA! " + motivo;
-                            dom.netStatus.style.color = "#FF3D00";
-                            setTimeout(() => {
-                                if (dangerMode && !emergenciaActivaMQTT) setDangerMode(false, "");
-                            }, 30000);
+                            if (Notification.permission === "granted") new Notification("🚨 ALERTA FLUXA IGNIS", { body: "Incendio detectado" });
+                            // No modificar netStatus
                         } else if (topic === 'fxi/simular') simulationActive = (msg === 'FUEGO_ON');
                         else if (topic === 'fxi/logs' && !potatoMode) {
                             const data = JSON.parse(msg);
                             addSystemLog(data.message || '', data.level || 'info');
-                        } else if (topic === 'fxi/angulo') {
-                            const ang = parseFloat(msg);
-                            if (!isNaN(ang)) updateServoAngle(ang);
                         } else if (topic === 'fxi/flama1') {
                             actualizarFlama(1, msg === 'ON');
                         } else if (topic === 'fxi/flama2') {
@@ -1081,92 +1072,15 @@
                 if (!adminAuthenticated || potatoMode || watchMode) return;
                 try {
                     const stats = currentMode === 'mqtt' ? await sendAdminCommand('get_stats') : await httpGetJson('/info');
-                    const sketch = stats.sketch_percent || 45;
-                    const littlefs = stats.littlefs_percent || 23;
                     dom.statsGrid.innerHTML = `
-                        <div class="stat-card"><div class="stat-label">FW</div><div class="stat-value">${stats.firmware || '--'}</div></div>
-                        <div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value">${formatUptime(stats.uptime || 0)}</div></div>
-                        <div class="stat-card"><div class="stat-label">Heap</div><div class="stat-value">${stats.heap_percent || 0}%</div></div>
-                        <div class="stat-card"><div class="stat-label">Flash</div><div class="stat-value">${sketch+littlefs}%</div></div>`;
-                } catch(e) { dom.statsGrid.innerHTML = '<div class="stat-card">Error</div>'; }
+                        <div class="stat-card"><div class="stat-label">FW</div><div class="stat-value">${stats.firmware||'--'}</div></div>
+                        <div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value">${formatUptime(stats.uptime||0)}</div></div>
+                        <div class="stat-card"><div class="stat-label">Heap</div><div class="stat-value">${stats.heap_percent||0}%</div></div>`;
+                } catch(e) {}
             }
             function formatUptime(s) { let d=Math.floor(s/86400), h=Math.floor((s%86400)/3600), m=Math.floor((s%3600)/60); return `${d}d ${h}h ${m}m`; }
-            async function updateLogsUI() {
-                if (!adminAuthenticated || potatoMode || watchMode) return;
-                try {
-                    let logs;
-                    if (currentMode === 'mqtt') {
-                        const data = await sendAdminCommand('get_logs');
-                        logs = data.logs || [];
-                    } else {
-                        const data = await httpGetJson('/logs');
-                        logs = data.logs || [];
-                    }
-                    if (!dom.liveLogs) return;
-                    if (logs.length === 0) { dom.liveLogs.innerHTML = '<div class="log-entry log-info">No hay logs recientes</div>'; return; }
-                    dom.liveLogs.innerHTML = '';
-                    logs.slice().reverse().forEach(log => {
-                        const t = new Date(log.timestamp).toLocaleTimeString();
-                        const entry = document.createElement('div');
-                        entry.className = `log-entry log-${log.level}`;
-                        entry.innerHTML = `<span class="log-timestamp ${showTimestamps ? 'visible' : ''}">[${t}]</span> ${log.message}`;
-                        dom.liveLogs.appendChild(entry);
-                    });
-                } catch(e) {}
-            }
-            async function measurePing() {
-                if (!adminAuthenticated || potatoMode || watchMode) return;
-                const start = performance.now();
-                try {
-                    if (currentMode === 'mqtt') await sendAdminCommand('ping');
-                    else await fetch('/estado', { method: 'HEAD' });
-                    const duration = performance.now() - start;
-                    pingHistory.push(duration);
-                    if (pingHistory.length > 20) pingHistory.shift();
-                    drawPingGraph();
-                    dom.avgPing.innerText = (pingHistory.reduce((a,b)=>a+b,0)/pingHistory.length).toFixed(1);
-                } catch(e) {}
-            }
-            function drawPingGraph() {
-                if (potatoMode) return;
-                const canvas = dom.pingCanvas;
-                if (!canvas) return;
-                const w = canvas.clientWidth, h = 70;
-                canvas.width = w; canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, w, h);
-                if (pingHistory.length < 2) return;
-                const step = w / (pingHistory.length - 1);
-                ctx.beginPath();
-                ctx.strokeStyle = "#7AF0D4";
-                ctx.lineWidth = 2;
-                for (let i=0; i<pingHistory.length; i++) {
-                    let x = i * step;
-                    let y = h - (pingHistory[i] / 200) * h;
-                    if (y < 0) y = 0;
-                    if (i===0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-                ctx.stroke();
-            }
-            async function sendCommand(cmd) {
-                if (!adminAuthenticated) { showToast("Accede al panel de admin primero", true); return; }
-                try {
-                    if (currentMode === 'mqtt') {
-                        if (cmd === 'restart') { await sendAdminCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
-                        else if (cmd === 'toggle_sim') { const resp = await sendAdminCommand('toggle_sim'); simulationActive = resp.simulating; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); }
-                        else if (cmd === 'clear_logs') { await sendAdminCommand('clear_logs'); dom.liveLogs.innerHTML = '<div class="log-entry log-info">Logs limpiados</div>'; showToast("Logs limpiados"); }
-                        else if (cmd === 'update_fw') { await sendAdminCommand('update_fw'); showToast("Iniciando actualización de firmware..."); }
-                        else if (cmd === 'update_html') { await sendAdminCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => location.reload(), 1000); }
-                    } else {
-                        if (cmd === 'restart') { await httpSendCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
-                        else if (cmd === 'toggle_sim') { await httpSendCommand('toggle_sim'); simulationActive = !simulationActive; addSystemLog(`Simulación ${simulationActive ? 'activada' : 'desactivada'}`, 'warn'); }
-                        else if (cmd === 'clear_logs') { await httpSendCommand('clear_logs'); dom.liveLogs.innerHTML = '<div class="log-entry log-info">Logs limpiados</div>'; showToast("Logs limpiados"); }
-                        else if (cmd === 'update_fw') { await httpSendCommand('update_fw'); showToast("Iniciando actualización de firmware..."); }
-                        else if (cmd === 'update_html') { await httpSendCommand('update_html'); showToast("HTML actualizado. Recargando..."); setTimeout(() => location.reload(), 1000); }
-                    }
-                } catch(e) { addSystemLog(`Error en comando ${cmd}: ${e.message}`, 'error'); showToast(`Error: ${e.message}`, true); }
-            }
+            async function updateLogsUI() { /* placeholder */ }
+            async function measurePing() { /* placeholder */ }
 
             function toggleWatchMode() {
                 watchMode = !watchMode;
@@ -1195,7 +1109,7 @@
                         adminAuthenticated = true;
                         dom.adminCard.classList.add('expanded');
                         startAdminServices();
-                        addSystemLog("🔓 Acceso concedido al panel de administración", 'info');
+                        addSystemLog("🔓 Acceso concedido", 'info');
                         showToast("Acceso concedido");
                     } else if (pwd !== null) showToast("Contraseña incorrecta", true);
                 } else {
@@ -1223,7 +1137,6 @@
                     if (previousBgEnabled) { bgEnabled = true; dom.bgToggle.innerText = '✨'; dom.canvasBg.style.display = ''; resizeCanvas(); startParticles(); }
                     if (adminAuthenticated && !watchMode) startAdminServices();
                     if (currentMode === 'http') { clearInterval(httpPollInterval); httpPollInterval = setInterval(() => { if (currentMode === 'http') httpGetEstado().catch(e => {}); }, 2000); }
-                    lastSvgDrawTime = 0; throttledSVGUpdate();
                 }
             });
             dom.themeToggle.onclick = () => { isDarkMode = !isDarkMode; document.body.classList.toggle('light-mode'); dom.themeToggle.innerText = isDarkMode ? '✳' : '☀️'; };
@@ -1244,7 +1157,7 @@
                 dom.rangeButtons.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 currentPoints = parseInt(btn.getAttribute('data-points'), 10);
-                lastSvgDrawTime = 0; throttledSVGUpdate();
+                throttledSVGUpdate();
             };
             document.querySelector('.range-btn[data-points="20"]').classList.add('active');
 
@@ -1268,14 +1181,23 @@
                     container.appendChild(div);
                 });
             }
+            async function sendCommand(cmd) {
+                if (!adminAuthenticated) { showToast("Admin requerido", true); return; }
+                try {
+                    if (currentMode === 'mqtt') {
+                        if (cmd === 'restart') { await sendAdminCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
+                        else if (cmd === 'toggle_sim') { const resp = await sendAdminCommand('toggle_sim'); simulationActive = resp.simulating; }
+                    } else {
+                        if (cmd === 'restart') { await httpSendCommand('restart'); showToast("Reiniciando ESP32..."); setTimeout(() => location.reload(), 3000); }
+                    }
+                } catch(e) { showToast("Error", true); }
+            }
             fillActionBlocks(dom.actionBlocks, [
                 { icon: "🔄", label: "Reiniciar ESP32", cmd: "restart" },
-                { icon: "🔍", label: "Comprobar OTA", cmd: "check_ota" },
-                { icon: "🔥", label: "Simular fuego", cmd: "toggle_sim" },
-                { icon: "🗑", label: "Limpiar logs", cmd: "clear_logs" }
+                { icon: "🔥", label: "Simular fuego", cmd: "toggle_sim" }
             ]);
             fillActionBlocks(dom.updateBlocks, [
-                { icon: "📡", label: "Actualizar Firmware", cmd: "update_fw" },
+                { icon: "📡", label: "Actualizar FW", cmd: "update_fw" },
                 { icon: "🌐", label: "Actualizar HTML", cmd: "update_html" }
             ]);
 
@@ -1287,7 +1209,7 @@
                 update() { this.alpha += this.speed; if(this.alpha > 1 || this.alpha < 0) this.speed *= -1; }
                 draw() { ctxBg.fillStyle = isDarkMode ? `rgba(234,226,209,${this.alpha*0.18})` : `rgba(11,57,84,${this.alpha*0.08})`; ctxBg.beginPath(); ctxBg.arc(this.x, this.y, this.size, 0, Math.PI*2); ctxBg.fill(); }
             }
-            function initParticles() { particles = []; const count = window.innerWidth < 768 ? 6 : (window.innerWidth < 1400 ? 10 : 14); for(let i=0; i<count; i++) particles.push(new Particle()); }
+            function initParticles() { particles = []; for(let i=0;i<(window.innerWidth<768?4:8);i++) particles.push(new Particle()); }
             function animateParticles() { if(!bgEnabled||potatoMode) return; ctxBg.clearRect(0,0,dom.canvasBg.width,dom.canvasBg.height); particles.forEach(p=>{p.update();p.draw();}); animationId = requestAnimationFrame(animateParticles); }
             function startParticles() { if(animationId) cancelAnimationFrame(animationId); if(!bgEnabled||potatoMode) return; initParticles(); animateParticles(); }
             function stopParticles() { if(animationId) { cancelAnimationFrame(animationId); animationId = null; } }
@@ -1297,10 +1219,9 @@
             });
 
             if(bgEnabled) startParticles();
-            updateServoAngle(90);
             if (Notification.permission === "default") Notification.requestPermission();
             conectarMQTT();
-            addSystemLog("🚀 Panel listo (MQTT+HTTP). Detección autónoma de sensores activa.", 'info');
+            addSystemLog("🚀 Panel listo. Detección instantánea.", 'info');
             setTimeout(() => {
                 if (!mqttConnected && currentMode === 'mqtt' && forcedMode !== 'mqtt') setMode('http');
             }, 5000);
