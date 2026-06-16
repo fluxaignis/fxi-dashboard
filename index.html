@@ -616,7 +616,6 @@
 
             let isDarkMode = true;
             let dangerMode = false;
-            let emergenciaActivaMQTT = false;
             let simulationActive = false;
             let tempHistory = [], humHistory = [], gasHistory = [];
             let currentPoints = 20;
@@ -682,16 +681,14 @@
                 const llamaDer = parseInt(data.llama_der);
                 const gasVal = parseInt(data.gas);
 
-                if ((!isNaN(llamaIzq) && llamaIzq < UMBRAL_LLAMA) ||
-                    (!isNaN(llamaDer) && llamaDer < UMBRAL_LLAMA) ||
-                    (!isNaN(gasVal) && gasVal > UMBRAL_GAS_HTTP)) {
-                    if (!dangerMode) {
-                        setDangerMode(true, "Incendio detectado");
-                    }
+                const hayPeligro = (!isNaN(llamaIzq) && llamaIzq < UMBRAL_LLAMA) ||
+                                   (!isNaN(llamaDer) && llamaDer < UMBRAL_LLAMA) ||
+                                   (!isNaN(gasVal) && gasVal > UMBRAL_GAS_HTTP);
+
+                if (hayPeligro) {
+                    if (!dangerMode) setDangerMode(true, "Incendio detectado");
                 } else {
-                    if (dangerMode && !emergenciaActivaMQTT) {
-                        setDangerMode(false, "");
-                    }
+                    if (dangerMode) setDangerMode(false, "");
                 }
             }
 
@@ -757,7 +754,6 @@
                 }
             }
             function resetAlertaForzado() {
-                emergenciaActivaMQTT = false;
                 setDangerMode(false, "");
                 if (simulationActive && mqttConnected) {
                     mqttClient.publish('fxi/simular', 'FUEGO_OFF');
@@ -765,18 +761,6 @@
                 }
                 dom.netStatus.innerText = "Alerta reiniciada";
                 showToast("Alerta reseteada");
-                setTimeout(() => {
-                    if (currentMode === 'mqtt' && mqttConnected) {
-                        dom.netStatus.innerHTML = 'MQTT: Conectado';
-                        dom.netStatus.style.color = 'var(--text-sec)';
-                    } else if (currentMode === 'http') {
-                        dom.netStatus.innerHTML = 'HTTP: Conectado';
-                        dom.netStatus.style.color = 'var(--text-sec)';
-                    } else {
-                        dom.netStatus.innerHTML = '--';
-                        dom.netStatus.style.color = 'var(--text-sec)';
-                    }
-                }, 2000);
             }
             function addSystemLog(message, level = 'info') {
                 if (potatoMode || !dom.liveLogs) return;
@@ -840,12 +824,8 @@
                 else if (tempVal < dangerTempThreshold) desc = 'Calor elevado';
                 else desc = '¡PELIGRO! Calor extremo';
                 dom.descVal.innerText = desc;
-                if (dangerMode && !emergenciaActivaMQTT) {
-                    if (tempVal < UMBRAL_DESACTIVACION_CRITICA) setDangerMode(false, "");
-                }
-                if (!dangerMode && tempVal >= dangerTempThreshold && !emergenciaActivaMQTT) {
-                    setDangerMode(true, "Temperatura crítica");
-                }
+                if (dangerMode && tempVal < UMBRAL_DESACTIVACION_CRITICA) setDangerMode(false, "");
+                if (!dangerMode && tempVal >= dangerTempThreshold) setDangerMode(true, "Temperatura crítica");
             }
             function actualizarHumedad(hum) {
                 const humVal = parseFloat(hum);
@@ -1022,9 +1002,18 @@
                             const data = JSON.parse(msg);
                             if (data.rssi !== undefined) actualizarRSSI(data.rssi);
                         } else if (topic === 'fxi/emergencia') {
-                            setDangerMode(true, "Incendio detectado");
-                            emergenciaActivaMQTT = true;
-                            if (Notification.permission === "granted") new Notification("🚨 ALERTA FLUXA IGNIS", { body: "Incendio detectado" });
+                            const data = JSON.parse(msg);
+                            if (data.motivo === "OK") {
+                                document.body.classList.remove('danger-alert');
+                                dom.flameIcon.className = 'flame-icon normal';
+                                dom.flameStatus.innerText = 'Estado: Normal';
+                                dangerMode = false;
+                                stopAlarm();
+                                console.log("Apagado por OK");
+                            } else {
+                                // Solo activar si hay peligro real (ya lo evaluará evaluateSensorData)
+                                console.log("Emergencia MQTT recibida, se evaluará con sensores");
+                            }
                         } else if (topic === 'fxi/simular') simulationActive = (msg === 'FUEGO_ON');
                         else if (topic === 'fxi/logs' && !potatoMode) {
                             const data = JSON.parse(msg);
@@ -1231,7 +1220,7 @@
             if(bgEnabled) startParticles();
             if (Notification.permission === "default") Notification.requestPermission();
             conectarMQTT();
-            addSystemLog("🚀 Panel listo 24/7 (detección inmediata).", 'info');
+            addSystemLog("🚀 Panel inteligente activo.", 'info');
             setTimeout(() => {
                 if (!mqttConnected && currentMode === 'mqtt' && forcedMode !== 'mqtt') setMode('http');
             }, 3000);
