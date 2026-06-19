@@ -11,63 +11,40 @@
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root {
-            --bg-start: #0B3954;
-            --bg-end: #061A2B;
-            --glass-bg: rgba(20, 30, 50, 0.8);
-            --glass-border: rgba(255, 255, 255, 0.1);
-            --text-main: #FFFFFF;
-            --text-sec: rgba(255, 255, 255, 0.6);
-            --accent-cyan: #7AF0D4;
-            --accent-blue: #EAE2D1;
-            --chart-pink: #F06292;
-            --chart-blue: #4FC3F7;
-            --chart-orange: #FFA726;
-            --flame-normal: #FFA726;
-            --flame-danger: #FF3D00;
-            --danger-glow: rgba(255, 61, 0, 0.6);
-            --color-firmware: #7AF0D4;
-            --color-littlefs: #FFA726;
-            --color-free: rgba(0, 0, 0, 0.4);
-            --status-online: #2e7d32;
-            --status-offline: #c62828;
+            --bg-start: #0B3954; --bg-end: #061A2B;
+            --glass-bg: rgba(20, 30, 50, 0.8); --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #FFFFFF; --text-sec: rgba(255, 255, 255, 0.6);
+            --accent-cyan: #7AF0D4; --accent-blue: #EAE2D1;
+            --chart-pink: #F06292; --chart-blue: #4FC3F7; --chart-orange: #FFA726;
+            --flame-normal: #FFA726; --flame-danger: #FF3D00;
+            --danger-glow: rgba(255, 61, 0, 0.6); --color-firmware: #7AF0D4;
+            --color-littlefs: #FFA726; --color-free: rgba(0, 0, 0, 0.4);
+            --status-online: #2e7d32; --status-offline: #c62828;
         }
         body.light-mode {
-            --bg-start: #E0F2F1;
-            --bg-end: #B2EBF2;
-            --glass-bg: rgba(255, 255, 255, 0.7);
-            --glass-border: rgba(0, 0, 0, 0.05);
-            --text-main: #0B3954;
-            --text-sec: rgba(11, 57, 84, 0.6);
+            --bg-start: #E0F2F1; --bg-end: #B2EBF2;
+            --glass-bg: rgba(255, 255, 255, 0.7); --glass-border: rgba(0, 0, 0, 0.05);
+            --text-main: #0B3954; --text-sec: rgba(11, 57, 84, 0.6);
             --danger-glow: rgba(255, 61, 0, 0.8);
         }
         body {
             margin: 0; padding: 0;
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
-            color: var(--text-main);
-            min-height: 100vh;
-            overflow-x: hidden;
+            color: var(--text-main); min-height: 100vh; overflow-x: hidden;
             transition: background 0.5s ease;
-            user-select: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            -webkit-touch-callout: none;
+            user-select: none; -webkit-user-select: none; -moz-user-select: none;
+            -ms-user-select: none; -webkit-touch-callout: none;
         }
         input, textarea {
-            user-select: text;
-            -webkit-user-select: text;
-            -moz-user-select: text;
-            -ms-user-select: text;
+            user-select: text; -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text;
         }
         body.danger-alert .glass-card {
             box-shadow: 0 0 15px var(--danger-glow), 0 0 30px rgba(255, 61, 0, 0.3);
             border-color: var(--flame-danger);
         }
         body.potato-mode * {
-            transition-duration: 0s !important;
-            animation-duration: 0s !important;
-            animation: none !important;
+            transition-duration: 0s !important; animation-duration: 0s !important; animation: none !important;
         }
         body.potato-mode .glass-card { backdrop-filter: none !important; }
         body.potato-mode #weather-canvas { display: none !important; }
@@ -111,10 +88,8 @@
             z-index: 0; pointer-events: none; image-rendering: auto;
         }
         .main-content {
-            position: relative; z-index: 2;
-            max-width: 1200px; margin: 0 auto;
-            padding: 40px 20px;
-            display: flex; flex-direction: column;
+            position: relative; z-index: 2; max-width: 1200px; margin: 0 auto;
+            padding: 40px 20px; display: flex; flex-direction: column;
         }
         .header {
             display: flex; align-items: center; margin-bottom: 35px;
@@ -671,6 +646,11 @@
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return await res.json();
             }
+            async function httpGetText(url) {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.text();
+            }
             async function httpSendCommand(cmd) {
                 const res = await fetch(`/cmd?action=${cmd}`);
                 return await res.text();
@@ -881,6 +861,7 @@
                 showToast("CSV descargado");
             }
 
+            // ========== GUARDAR UMBRALES (CORREGIDO) ==========
             dom.saveThresholdsBtn.addEventListener('click', async () => {
                 const newDanger = parseFloat(dom.thresholdDangerTemp.value) || 40;
                 const newFireMqtt = parseFloat(dom.thresholdFireMqtt.value) || 35;
@@ -892,19 +873,31 @@
                 localStorage.setItem('umbralFuego', newFireMqtt);
                 localStorage.setItem('umbralGas', newGas);
 
+                let exito = false;
                 try {
-                    if (currentMode === 'mqtt' && mqttConnected) {
-                        await sendAdminCommand('set_thresholds', {
-                            dangerTemp: newDanger,
-                            fireMqtt: newFireMqtt,
-                            gasLimit: newGas
-                        });
-                    } else {
-                        await httpGetJson(`/setThresholds?dangerTemp=${newDanger}&fireMqtt=${newFireMqtt}&gasLimit=${newGas}`);
-                    }
-                    showToast("Umbrales guardados y enviados al ESP32");
+                    // Intentar primero por HTTP (funciona siempre, incluso en AP)
+                    await httpGetText(`/setThresholds?dangerTemp=${newDanger}&fireMqtt=${newFireMqtt}&gasLimit=${newGas}`);
+                    exito = true;
                 } catch(e) {
-                    showToast("Umbrales guardados (local). Error al enviar al ESP32: " + e.message, true);
+                    console.warn('HTTP falló, intentando MQTT...', e);
+                    if (currentMode === 'mqtt' && mqttClient && mqttConnected) {
+                        try {
+                            await sendAdminCommand('set_thresholds', {
+                                dangerTemp: newDanger,
+                                fireMqtt: newFireMqtt,
+                                gasLimit: newGas
+                            });
+                            exito = true;
+                        } catch(e2) {
+                            console.error('MQTT también falló:', e2);
+                        }
+                    }
+                }
+
+                if (exito) {
+                    showToast("Umbrales guardados y enviados al ESP32");
+                } else {
+                    showToast("Umbrales guardados localmente. Error al enviar al ESP32", true);
                 }
             });
 
@@ -1011,7 +1004,6 @@
                                 stopAlarm();
                                 console.log("Apagado por OK");
                             } else {
-                                // Solo activar si hay peligro real (ya lo evaluará evaluateSensorData)
                                 console.log("Emergencia MQTT recibida, se evaluará con sensores");
                             }
                         } else if (topic === 'fxi/simular') simulationActive = (msg === 'FUEGO_ON');
